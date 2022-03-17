@@ -40,6 +40,21 @@ Resources:
           Properties:
             Path: /date
             Method: get
+            
+  PullCurGoldPrice:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/
+      Handler: PullCurGoldPrice.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        GetDate:
+          Type: Api
+          Properties:
+            Path: /pullcurgoldprice
+            Method: get
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -51,6 +66,9 @@ Outputs:
   GetDateApi:
     Description: "Api Gateway endpoint URL for Prod stage for GetDate function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/date/" 
+  PullCurGoldPriceApi:
+    Description: "Api Gateway endpoint URL for Prod stage for GetCurGoldPrice function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/pullcurgoldprice/"
   HelloWorldFunction:
     Description: "Hello World Lambda Function ARN"
     Value: !GetAtt HelloWorldFunction.Arn
