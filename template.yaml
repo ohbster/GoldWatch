@@ -10,11 +10,106 @@ Globals:
   Function:
     Timeout: 3
 
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+  
+      - 
+        Label: 
+          default: Database Parameters
+        Parameters:
+          - DatabaseInstanceIdentifier
+          - DatabaseName
+          - DatabaseUser
+          - DatabasePassword
+          - DatabaseBackupRetentionPeriod
+          - DatabaseAllocatedStorage
+          - DatabaseInstanceClass
+          - MultiAZDatabase
+
+Parameters:
+  #ExportVpcStackName:
+    #Description: The name of the vpc stack that exports values
+    #Type: String
+
+  DatabaseInstanceIdentifier:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with letter and contain only alpha numeric values
+    Default: goldwatchmysql
+    Description: Instance identifier name
+    MaxLength: 60
+    MinLength: 1
+    Type: String
+
+  DatabaseName:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with letter and contain only alpha numeric values
+    Default: goldwatchdb
+    Description: MySQL database name
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+
+  DatabaseUser: 
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with letter and contain only alpha numeric values
+    Default: dbadmin
+    Description: Username for MySQL database access
+    MaxLength: 16
+    MinLength: 1
+    NoEcho: true
+    Type: String
+
+  DatabasePassword:
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: Must contain only alphanumeric characters
+    Default: Test1234
+    Description: Password for MySQL database access
+    MaxLength: 41
+    MinLength: 8
+    NoEcho: true
+    Type: String
+
+  DatabaseBackupRetentionPeriod:
+    ConstraintDescription: Database backup retention period must be between 0 and 35 
+    Default: 0
+    Description: The number fo days for which automatic DB snapshots are stored
+    MaxValue: 35
+    MinValue: 0
+    Type: Number
+
+  DatabaseAllocatedStorage:
+    ConstraintDescription: Must be bewteen 0 and 1024Gb
+    Default: 20
+    Description: The size of the database (Gb)
+    MaxValue: 1024
+    MinValue: 5
+    Type: Number
+
+  DatabaseInstanceClass:
+    AllowedValues:
+      - db.t2.micro
+      - db.t3.micro
+     
+    ConstraintDescription: Must select a valid database instance type
+    Default: db.t2.micro
+    Description: The database instance type
+    Type: String
+
+  MultiAZDatabase:
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Must be either true or false 
+    Default: false
+    Description: Creates a Multi-AZ MySQL Amazon RDS database instance
+    Type: String
+
 Resources:
-  HelloWorldFunction:
+  GWInitFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: hello_world/
+      CodeUri: gold_watch/
       Handler: app.lambda_handler
       Runtime: python3.9
       Architectures:
@@ -23,13 +118,13 @@ Resources:
         HelloWorld:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /hello
+            Path: /init
             Method: get
             
   GetDateFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: hello_world/
+      CodeUri: gold_watch/
       Handler: date.lambda_handler
       Runtime: python3.9
       Architectures:
@@ -44,7 +139,7 @@ Resources:
   PullCurGoldPrice:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: hello_world/
+      CodeUri: gold_watch/
       Handler: PullCurGoldPrice.lambda_handler
       Runtime: python3.9
       Architectures:
@@ -55,14 +150,64 @@ Resources:
           Properties:
             Path: /pullcurgoldprice
             Method: get
+            
+  #DatabaseSubnetGroup:
+    #Type: AWS::RDS::DBSubnetGroup
+    #Properties:
+      #DBSubnetGroupDescription:
+      #SubnetIds: 
+      #Tags:
+        #- Key:
+          #Value:  
+            
+  GoldWatchDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      #DatabaseName: goldwatch_db
+      Engine: mysql
+      EngineVersion: 5.7
+      SourceRegion: us-east-1
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      AvailabilityZone:  !Select [ 0, !GetAZs '']
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBInstanceIdentifier: !Ref DatabaseInstanceIdentifier
+      DBName:  !Ref DatabaseName
+      #DBSubnetGroupName: !Ref DatabaseSubnetGroup          
+      #MasterUsername: !Ref DatabaseUser
+      #MasterUserPassword: !Ref DatabasePassword
+      MasterUsername: "{{resolve:ssm:gw-dbuser:1}}"
+      MasterUserPassword: "{{resolve:ssm-secure:gw-dbpass:1}}"
+      MultiAZ: !Ref MultiAZDatabase
+      #VPCSecurityGroups:
+  
+  #This section creates an EventsBridge Rule that triggers lambda functions 
+  #to update the gold price at 5 min intervals.     
+  UpdateGoldPriceRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: EventBridge rule to run the pullcurgoldprice lambda function
+      Name: UpdateGoldPriceRule
+      ScheduleExpression: rate(5 minutes)
+      State: ENABLED
+      Targets:
+        - 
+          Arn:
+            Fn::GetAtt:
+              - "PullCurGoldPrice"
+              - "Arn"
+          Id: "UpdateGoldPriceTarget1"
+     
+      
+    
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+    Description: "API Gateway endpoint URL for Prod stage for Gold Watch Init"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/init/"
   GetDateApi:
     Description: "Api Gateway endpoint URL for Prod stage for GetDate function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/date/" 
@@ -78,3 +223,6 @@ Outputs:
   HelloWorldFunctionIamRole:
     Description: "Implicit IAM Role created for Hello World function"
     Value: !GetAtt HelloWorldFunctionRole.Arn
+  #GoldWatchDB:
+  #  Description: "Aurora-mysql db ARN"
+  #  Value: !GetAtt GoldWatchDB.Arn
