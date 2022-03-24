@@ -9,6 +9,25 @@
 
 import json
 import requests
+import os
+import boto3
+import logging
+from botocore.exceptions import ClientError
+
+
+def get_parameter(parameter_name, with_decryption):
+    ssm_client = boto3.client('ssm')
+    
+    try:
+        result = ssm_client.get_parameter(
+            Name=parameter_name,
+            WithDecryption=with_decryption
+            )
+    except ClientError as e:
+        logging.error(e)
+        return None
+    return result
+    
 
 
 def lambda_handler(event, context):
@@ -16,6 +35,8 @@ def lambda_handler(event, context):
 
     response = requests.get("http://api.metals.live/v1/spot/gold")
     price_data = json.loads(response.text)
+    secret = get_parameter('mylilsecret', True)
+    
     #price_data = None
     
     #need to verify data is good
@@ -50,7 +71,12 @@ def lambda_handler(event, context):
                f" highest price = {daily_high}",
                "daily_high": f"{daily_high}",
                "daily_low": f"{daily_low}",
-               "cur_price": f"{cur_price}"
+               "cur_price": f"{cur_price}",
+               "ENV": f"{os.environ['ENV']}",
+               "DBUSER": f"{os.environ['DBUSER']}",
+               "my_secret": f"{secret['Parameter']['Value']}"
+               #"my_secret": f"{secret}"
+    
                })
         
         

@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 35 #change this back to 3
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -28,9 +28,10 @@ Metadata:
           - MultiAZDatabase
 
 Parameters:
-  #ExportVpcStackName:
-    #Description: The name of the vpc stack that exports values
-    #Type: String
+  ExportVpcStackName:
+    Description: The name of the vpc stack that exports values
+    Type: String
+    Default: DBVPC
 
   DatabaseInstanceIdentifier:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -106,16 +107,35 @@ Parameters:
     Type: String
 
 Resources:
-  GWInitFunction:
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for GoldWatch RDS database
+      SubnetIds:
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet
+      Tags:
+        - Key: Name
+          Value: database-subnets
+          
+  GoldWatchInitFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: gold_watch/
-      Handler: app.lambda_handler
+      Handler: gwinit.lambda_handler
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter
+            Resource: '*'         
       Runtime: python3.9
       Architectures:
         - x86_64
       Events:
-        HelloWorld:
+        Init:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /init
@@ -140,10 +160,23 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: gold_watch/
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter
+            Resource: '*'       
+      Environment:
+        Variables:
+          ENV: 'dev'
+          DBUSER: "{{resolve:ssm:gw-dbuser:1}}"
       Handler: PullCurGoldPrice.lambda_handler
       Runtime: python3.9
       Architectures:
-        - x86_64
+        - x86_64     
       Events:
         GetDate:
           Type: Api
@@ -173,13 +206,14 @@ Resources:
       DBInstanceClass: !Ref DatabaseInstanceClass
       DBInstanceIdentifier: !Ref DatabaseInstanceIdentifier
       DBName:  !Ref DatabaseName
-      #DBSubnetGroupName: !Ref DatabaseSubnetGroup          
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup          
       #MasterUsername: !Ref DatabaseUser
       #MasterUserPassword: !Ref DatabasePassword
       MasterUsername: "{{resolve:ssm:gw-dbuser:1}}"
       MasterUserPassword: "{{resolve:ssm-secure:gw-dbpass:1}}"
       MultiAZ: !Ref MultiAZDatabase
-      #VPCSecurityGroups:
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-DataBaseSecurityGroup
   
   #This section creates an EventsBridge Rule that triggers lambda functions 
   #to update the gold price at 5 min intervals.     
@@ -199,13 +233,12 @@ Resources:
           Id: "UpdateGoldPriceTarget1"
      
       
-    
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
+  GoldWatchInitApi:
     Description: "API Gateway endpoint URL for Prod stage for Gold Watch Init"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/init/"
   GetDateApi:
@@ -214,15 +247,16 @@ Outputs:
   PullCurGoldPriceApi:
     Description: "Api Gateway endpoint URL for Prod stage for GetCurGoldPrice function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/pullcurgoldprice/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
+  #HelloWorldFunction:
+    #Description: "Hello World Lambda Function ARN"
+    #Value: !GetAtt HelloWorldFunction.Arn
   GetDateFunction:
     Description: "Get date lambda function ARN"
     Value: !GetAtt GetDateFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  #HelloWorldFunctionIamRole:
+    #Description: "Implicit IAM Role created for Hello World function"
+    #Value: !GetAtt HelloWorldFunctionRole.Arn
+  
   #GoldWatchDB:
   #  Description: "Aurora-mysql db ARN"
   #  Value: !GetAtt GoldWatchDB.Arn
