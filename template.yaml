@@ -31,7 +31,7 @@ Parameters:
   ExportVpcStackName:
     Description: The name of the vpc stack that exports values
     Type: String
-    Default: DBVPC
+    Default: gw-network
 
   DatabaseInstanceIdentifier:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -107,15 +107,15 @@ Parameters:
     Type: String
 
 Resources:
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnet group for GoldWatch RDS database
-      SubnetIds:
-        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet
-      Tags:
-        - Key: Name
-          Value: database-subnets
+  #DatabaseSubnetGroup:
+    #Type: AWS::RDS::DBSubnetGroup
+    #Properties:
+      #DBSubnetGroupDescription: Subnet group for GoldWatch RDS database
+      #SubnetIds:
+        #- Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet
+      #Tags:
+        #- Key: Name
+          #Value: database-subnets
           
   GoldWatchInitFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -184,15 +184,6 @@ Resources:
             Path: /pullcurgoldprice
             Method: get
             
-  #DatabaseSubnetGroup:
-    #Type: AWS::RDS::DBSubnetGroup
-    #Properties:
-      #DBSubnetGroupDescription:
-      #SubnetIds: 
-      #Tags:
-        #- Key:
-          #Value:  
-            
   GoldWatchDB:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -206,14 +197,15 @@ Resources:
       DBInstanceClass: !Ref DatabaseInstanceClass
       DBInstanceIdentifier: !Ref DatabaseInstanceIdentifier
       DBName:  !Ref DatabaseName
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup          
+      DeletionProtection: false
+      #DBSubnetGroupName: !Ref DatabaseSubnetGroup          
       #MasterUsername: !Ref DatabaseUser
       #MasterUserPassword: !Ref DatabasePassword
       MasterUsername: "{{resolve:ssm:gw-dbuser:1}}"
       MasterUserPassword: "{{resolve:ssm-secure:gw-dbpass:1}}"
       MultiAZ: !Ref MultiAZDatabase
       VPCSecurityGroups:
-        - Fn::ImportValue: !Sub ${ExportVpcStackName}-DataBaseSecurityGroup
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
   
   #This section creates an EventsBridge Rule that triggers lambda functions 
   #to update the gold price at 5 min intervals.     
