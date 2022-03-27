@@ -5,46 +5,50 @@ import logging
 import pymysql
 import boto3
 from botocore.exceptions import ClientError
+from get_parameter import * 
 
-def get_parameter(parameter_name, with_decryption):
-    ssm_client = boto3.client('ssm')
-    
-    try:
-        result = ssm_client.get_parameter(
-            Name=parameter_name,
-            WithDecryption=with_decryption
-            )
-    except ClientError as e:
-        logging.error(e)
-        return None
-    return result
 
-rds_host = "goldwatchmysql.csdlsad8yvs8.us-east-1.rds.amazonaws.com"
-#user = rds_config.db_username
-#password = rds_config.db_password
-#db_name = rds_config.db_name
+rds_host = (get_parameter('gw-dbaddr', False))['Parameter']['Value']
+rds_port = (get_parameter('gw-dbport', False))['Parameter']['Value']
 db_name = (get_parameter('gw-dbname', False))['Parameter']['Value']
 user = (get_parameter('gw-dbuser', False))['Parameter']['Value']
 password = (get_parameter('gw-dbpass', True))['Parameter']['Value']
 
 connection = pymysql.connect(host=rds_host, user=user, passwd=password, db=db_name)
-
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 
 def lambda_handler(event, context):
+    print("Creating Table")
     cursor = connection.cursor()
+    
     cursor.execute('''CREATE TABLE IF NOT EXISTS GoldPrice(
-    Day DATE,
-    High REAL,
-    Low REAL,
-    Current REAL
+    Day DATE PRIMARY KEY,
+    High REAL NOT NULL,
+    Low REAL NOT NULL,
+    Current REAL NOT NULL
      
     );
+    ''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_Lower(
+    Email VARCHAR PRIMARY KEY,
+    Target REAL NOT NULL
+    );
+    ''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_Upper(
+    Email VARCHAR PRIMARY KEY,
+    Target REAL NOT NULL
+    );    
     ''')
     cursor.execute('''INSERT INTO GoldPrice (Day, High, Low, Current)
     VALUES (0000-00-00, 0.00, 0.00, 0.00);
     ''')
+    cursor.execute('''SELECT * FROM GoldPrice''')
+    for row in cursor:
+        print(row)
+        logger.info(row)
     
     return {
         'statusCode': 200,

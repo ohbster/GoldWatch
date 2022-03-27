@@ -13,21 +13,8 @@ import os
 import boto3
 import logging
 from botocore.exceptions import ClientError
+from get_parameter import *
 
-
-def get_parameter(parameter_name, with_decryption):
-    ssm_client = boto3.client('ssm')
-    
-    try:
-        result = ssm_client.get_parameter(
-            Name=parameter_name,
-            WithDecryption=with_decryption
-            )
-    except ClientError as e:
-        logging.error(e)
-        return None
-    return result
-    
 
 
 def lambda_handler(event, context):
