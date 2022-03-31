@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 35 #change this back to 3
+    Timeout: 30 #change this back to 3
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -28,19 +28,15 @@ Metadata:
           - MultiAZDatabase
 
 Parameters:
+  EC2InstanceManagedPolicy:
+    Type: String
+    Description: ARN of the IAM Manage policy to allow SSM to mananage EC2 instances
+    Default: arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+
   ExportVpcStackName:
     Description: The name of the vpc stack that exports values
     Type: String
-    Default: gw-network
-    
-  DefaultVPC:
-    AllowedPattern: 'vpc-[a-zA-Z0-9]*'
-    Description: The default vpc is used to avoid incurring charges with multi-az subnetgroup
-    Type: String
-    #Default: vpc-placeholder
-    Default: vpc-0cfa8c853c43d51b1
-    
-     
+    Default: gw-network    
 
   DatabaseInstanceIdentifier:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -116,16 +112,12 @@ Parameters:
     Type: String
 
 Resources:
-  #DatabaseSubnetGroup:
-    #Type: AWS::RDS::DBSubnetGroup
-    #Properties:
-      #DBSubnetGroupDescription: Subnet group for GoldWatch RDS database
-      #SubnetIds:
-        #- Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet
-      #Tags:
-        #- Key: Name
-          #Value: database-subnets
+
           
+##########
+#Functions
+##########          
+
   GoldWatchInitFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -192,35 +184,16 @@ Resources:
           Properties:
             Path: /pullcurgoldprice
             Method: get
-            
-  #Networking                          
-  GoldWatchVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      CidrBlock: 10.0.0.0/16
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref GoldWatchVPC
-      CidrBlock: 10.0.0.0/24            
-  RDSInstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable Mysql ingress
-      VpcId: !Ref DefaultVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0     
-  
-  #Db              
+           
+##########
+#Db    
+##########
+          
   GoldWatchDB:
     Type: AWS::RDS::DBInstance
+    DependsOn: 
+      - DatabaseSubnetGroup
     Properties:
-      #DatabaseName: goldwatch_db
       Engine: mysql
       EngineVersion: 5.7
       SourceRegion: us-east-1
@@ -231,16 +204,31 @@ Resources:
       DBInstanceIdentifier: !Ref DatabaseInstanceIdentifier
       DBName:  !Ref DatabaseName
       DeletionProtection: false
-      #DBSubnetGroupName: !Ref DatabaseSubnetGroup          
-      #MasterUsername: !Ref DatabaseUser
-      #MasterUserPassword: !Ref DatabasePassword
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup          
       MasterUsername: "{{resolve:ssm:gw-dbuser:1}}"
       MasterUserPassword: "{{resolve:ssm-secure:gw-dbpass:1}}"
-      #MultiAZ: !Ref MultiAZDatabase
+      MultiAZ: !Ref MultiAZDatabase
       VPCSecurityGroups: 
-        - !Ref RDSInstanceSecurityGroup
+        #- !Ref RDSInstanceSecurityGroup
         
-        #- Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+                  
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: goldwatch db subnet group    
+      DBSubnetGroupDescription: Subnet group for GoldWatch RDS database
+      SubnetIds:
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2
+        #- Ref! PrivateSubnet1
+        #- Ref! PrivateSubnet2
+        #- Fn::Ref: PrivateSubnet1
+        #- Fn::Ref: PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: Database subnets
+
   
   GoldWatchDBEndpointAddr:
     Type: AWS::SSM::Parameter
@@ -261,7 +249,11 @@ Resources:
           - "GoldWatchDB"
           - "Endpoint.Port"          
           
-    
+
+          
+##########
+#EventBridge 
+##########    
   #This section creates an EventsBridge Rule that triggers lambda functions 
   #to update the gold price at 5 min intervals.     
   UpdateGoldPriceRule:
@@ -278,9 +270,61 @@ Resources:
               - "PullCurGoldPrice"
               - "Arn"
           Id: "UpdateGoldPriceTarget1"
-     
-      
 
+##########
+#EC2 Instance used for web and mail server
+##########  
+  GoldWatchEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0c02fb55956c7d316 
+        #Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type  
+          #ami-0c02fb55956c7d316 (64-bit x86) 
+          #ami-03190fe20ef6b1419 (64-bit Arm)
+      #SubnetId: !Ref PublicSubnet1
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1 
+      #Need to parameterize this
+      KeyName: EC2 Tutorial
+      UserData: 
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl enable httpd
+            systemctl start httpd
+            
+###Amazon Blocks outgoing smtp traffic Must use SES###
+            #yum install -y sendmail
+            #systemctl enable sendmail
+            #systemctl start sendmail
+            #echo "This is a test email from GoldWatch" | sendmail -s "Test Email" ohbster@protonmail.com 
+      SecurityGroupIds:
+        #- !Ref EC2InstanceSecurityGroup
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          
+  
+  #This section creates role and System Manager resources to run commands to
+  #ec2 instance for mailing alerts
+  EC2RoleForSSM:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns: 
+        - !Ref EC2InstanceManagedPolicy
+               
+  
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM

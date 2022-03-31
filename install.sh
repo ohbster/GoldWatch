@@ -5,4 +5,6 @@ DEFAULTVPCID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --quer
 echo ${DEFAULTVPCID};
 
 sam build;
-sam deploy --no-confirm-changeset --parameter-overrides ParameterKey=GoldWatchVPC,ParameterValue=$DEFAULTVPCID
+sam deploy --no-confirm-changeset &
+
+
