@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This creates the GoldWatch Application Load Balancer stack
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+      -
+        Label:
+          default: "Certificate Arn"
+        Parameters:
+          - AcmCertificate          
+      -
+        Label:
+          default: "Export VPC Stack Name"
+        Parameter:
+          - ExportVpcStackName
+
+Parameters:
+  AcmCertificate:
+    Description: The ARN of the AWS Certification Manager's Certification
+    Type: String
+
+  ExportVpcStackName:
+    Description: The name of the vpc stack that exports values
+    Type: String 
+
+Resources: 
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4
+      LoadBalancerAttributes: 
+        - LoadBalancerAttribute
+      Name: GWApplicationLoadBalancer
+      #Scheme: String
+      SecurityGroups: 
+        - Fn::ImportValue: !Sub ${ExportVPCStackName}-ALBSecurityGroup
+      #SubnetMappings: 
+      #  - SubnetMapping
+      Subnets: 
+        - Fn::ImportValue: !Sub ${ExportVPCStackName}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${ExportVPCStackName}-PublicSubnet2
+      Tags: 
+        - Tag
+      Type: String
+
+  ALBListenerNoSslCertificate:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - RedirectConfig:
+            Host: '#{host}'
+            Path: '/#{path}'
+            Port: '443'
+            Protocol: HTTPS
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ALBListenerSslCertificate:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200,302
+      Name: GWWebServer
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+        Fn::ImportValue: !Sub ${ExportVPCStackName}-VPC     
+
+
+Output:
+  ALBTargetGroup: 
+    Description: WebServer target group
+    Export:
+      Name: !Sub ${AWS::StackName}ALBTargetGroup
+    Value: !Ref ALBTargetGroup
+
+  ApplicationLoadBalancerDnsName:
+    Description: Application Load Balancer DNS Name
+    Export:
+      Name: !Sub ${AWS::StackName}-ApplicationLoadBalancerDnsName
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ApplicationLoadBalancerZoneID:
+    Description: Application Load Balancer Canonical Hosted Zone ID
+    Export:
+      Name:  !Sub ${AWS::StackName}-ApplicationLoadBalancerZoneID 
+    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
