@@ -24,29 +24,34 @@ Parameters:
   ExportVpcStackName:
     Description: The name of the vpc stack that exports values
     Type: String 
+    Default: gw-network
+    
+  ExportGoldWatchStackName:
+    Description: The name of the main GoldWatch stack that exports values
+    Type: String
+    Default: gold-watch
 
 Resources: 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties: 
       IpAddressType: ipv4
-      LoadBalancerAttributes: 
-        - LoadBalancerAttribute
+      #LoadBalancerAttributes: 
+      #  - LoadBalancerAttribute
       Name: GWApplicationLoadBalancer
       #Scheme: String
       SecurityGroups: 
-        - Fn::ImportValue: !Sub ${ExportVPCStackName}-ALBSecurityGroup
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
       #SubnetMappings: 
       #  - SubnetMapping
       Subnets: 
-        - Fn::ImportValue: !Sub ${ExportVPCStackName}-PublicSubnet1
-        - Fn::ImportValue: !Sub ${ExportVPCStackName}-PublicSubnet2
-      Tags: 
-        - Tag
-      Type: String
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet2
+
+      Type: application
 
   ALBListenerNoSslCertificate:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - RedirectConfig:
@@ -84,16 +89,24 @@ Resources:
       Name: GWWebServer
       Port: 80
       Protocol: HTTP
+      Targets:
+        - Id:
+            Fn::ImportValue: !Sub ${ExportGoldWatchStackName}-WebServerInstance
+          Port: 80
+        - Id:
+            Fn::ImportValue: !Sub ${ExportGoldWatchStackName}-WebServerInstance2
+          Port: 80
+      TargetType: instance
       UnhealthyThresholdCount: 5
       VpcId: 
-        Fn::ImportValue: !Sub ${ExportVPCStackName}-VPC     
+        Fn::ImportValue: !Sub ${ExportVpcStackName}-VPC     
 
 
-Output:
+Outputs:
   ALBTargetGroup: 
     Description: WebServer target group
     Export:
-      Name: !Sub ${AWS::StackName}ALBTargetGroup
+      Name: !Sub ${AWS::StackName}-ALBTargetGroup
     Value: !Ref ALBTargetGroup
 
   ApplicationLoadBalancerDnsName:

@@ -7,7 +7,7 @@ Description: >
 
 Globals:
   Function:
-    Timeout: 30 #change this back to 3
+    Timeout: 5 #change this back to 3
 
 Metadata:
   AWS::CloudFormation::Interface: 
@@ -36,6 +36,11 @@ Parameters:
     Description: The name of the vpc stack that exports values
     Type: String
     Default: gw-network    
+  
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH Access to EC2 Instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
 
   DatabaseInstanceIdentifier:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -144,11 +149,12 @@ Resources:
       #Allow the lambda function to communicate with the rds and web server instance      
       VpcConfig:
         SecurityGroupIds:
-          #- Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
         SubnetIds:
-          #- Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2
             
   GetDateFunction:
     Type: AWS::Serverless::Function
@@ -196,9 +202,10 @@ Resources:
         SecurityGroupIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1      
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2      
            
 ##########
 #Db    
@@ -280,7 +287,7 @@ Resources:
 ##########
 #EC2 Instance used for web and mail server
 ##########  
-  GoldWatchEC2Instance:
+  WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
@@ -289,21 +296,71 @@ Resources:
           #ami-0c02fb55956c7d316 (64-bit x86) 
           #ami-03190fe20ef6b1419 (64-bit Arm)
       SubnetId: 
-        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1 
+        Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1 
+      KeyName: !Ref KeyName
       #Need to parameterize this
-      KeyName: EC2 Tutorial
       UserData: 
         Fn::Base64:
           !Sub |
             #!/bin/bash
             yum update -y
+            yum amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            yum install -y httpd
+            systemctl enable httpd
+            systemctl start httpd
+            amazon-linux-extras enable php8.0
+            yum clean metadata
+            yum install php-cli php-pdo php-fpm php-mysqlnd
+      SecurityGroupIds:
+        #- !Ref EC2InstanceSecurityGroup
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Gold Watch WebServer Instance    
+          
+  WebServerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0c02fb55956c7d316 
+        #Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type  
+          #ami-0c02fb55956c7d316 (64-bit x86) 
+          #ami-03190fe20ef6b1419 (64-bit Arm)
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
+      #Need to parameterize this
+      #KeyName: EC2 Tutorial
+      KeyName: !Ref KeyName
+      UserData: 
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            yum amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
             yum install -y httpd
             systemctl enable httpd
             systemctl start httpd
       SecurityGroupIds:
         #- !Ref EC2InstanceSecurityGroup
         - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
-          
+      Tags:
+        - Key: Name
+          Value: Gold Watch WebServer Instance 2           
+  
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0c02fb55956c7d316
+      SubnetId:
+        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet2
+      KeyName: !Ref KeyName
+      SecurityGroupIds: 
+        - Fn::ImportValue: !Sub ${ExportVpcStackName}-BastionHostSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Bastion Host Instance
+  
   #This section creates role and System Manager resources to run commands to
   #ec2 instance for mailing alerts
   EC2RoleForSSM:
@@ -339,6 +396,16 @@ Outputs:
   GetDateFunction:
     Description: "Get date lambda function ARN"
     Value: !GetAtt GetDateFunction.Arn
+  WebServerInstance:
+    Description: Instance Id for the Web/Mail server
+    Export:
+      Name: !Sub ${AWS::StackName}-WebServerInstance
+    Value: !Ref WebServerInstance
+  WebServerInstance2:
+    Description: Instance Id for the Web/Mail server
+    Export:
+      Name: !Sub ${AWS::StackName}-WebServerInstance2
+    Value: !Ref WebServerInstance2
   #HelloWorldFunctionIamRole:
     #Description: "Implicit IAM Role created for Hello World function"
     #Value: !GetAtt HelloWorldFunctionRole.Arn

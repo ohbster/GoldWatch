@@ -25,27 +25,26 @@ def lambda_handler(event, context):
     cursor = connection.cursor()
     
     cursor.execute('''CREATE TABLE IF NOT EXISTS GoldPrice(
-    Day DATE PRIMARY KEY,
+    Day DATE PRIMARY KEY NOT NULL,
     High REAL NOT NULL,
     Low REAL NOT NULL,
     Current REAL NOT NULL
-     
     );
     ''')
     
     #Alerts if price goes below a target
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_Lower(
-    Email VARCHAR PRIMARY KEY,
-    Target REAL NOT NULL,
-    Active BOOL
+    Email VARCHAR(320) PRIMARY KEY NOT NULL,
+    Price_Target REAL NOT NULL,
+    Alert_Active BOOLEAN DEFAULT 1
     );
     ''')
     
     #Alerts if price goes above a certain target
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_Upper(
-    Email VARCHAR PRIMARY KEY,
-    Target REAL NOT NULL,
-    Active BOOL
+    Email VARCHAR(320) PRIMARY KEY NOT NULL,
+    Price_Target REAL NOT NULL,
+    Alert_Active BOOLEAN DEFAULT 1
     );    
     ''')
     cursor.execute('''INSERT INTO GoldPrice (Day, High, Low, Current)

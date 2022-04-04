@@ -1,10 +1,14 @@
 #!/bin/bash
+#!/bin/bash
 
-DEFAULTVPCID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[*].VpcId' --output text);
+if [ -z "$1" ]
+then
+	echo -e "\nPlease provide a Name for an existing EC2 KeyPair for SSH access to EC2 Instance"
+	echo -e "\nCorrect usage: ./install <KeyPair Name>"
+else
 
-echo ${DEFAULTVPCID};
+    sam build;
+    sam deploy --parameter-overrides KeyName=\""$1"\" --no-confirm-changeset
 
-sam build;
-sam deploy --no-confirm-changeset &
-
+fi
 

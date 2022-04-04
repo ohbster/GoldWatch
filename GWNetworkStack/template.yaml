@@ -69,7 +69,7 @@ Resources:
 ##########
 #Subnets
 ##########
-
+#PUBLIC
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -90,18 +90,42 @@ Resources:
       Tags:
         - Key: Name
           Value: Public Subnet 2
-      VpcId: !Ref VPC      
+      VpcId: !Ref VPC
+      
+  #PRIVATE
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet 1 | Database Tier
+      VpcId: !Ref VPC
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet 2 | WebServer Tier
+      VpcId: !Ref VPC
+       
       
 ##########
 #Routing
 ##########
-#PUBLIC
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       Tags:
         - Key: Name
-          Value: Public Route Table]
+          Value: Public Route Table
       VpcId: !Ref VPC
 
   PublicRoute:
@@ -122,29 +146,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
-#PRIVATE
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
-      CidrBlock: !Ref PrivateSubnet1Cidr
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: Private Subnet 1 | Database Tier
-      VpcId: !Ref VPC
-
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
-      CidrBlock: !Ref PrivateSubnet2Cidr
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: Private Subnet 2 | Database Tier
-      VpcId: !Ref VPC
-      
+     
 ##########
 #Security Groups
 ##########
@@ -184,7 +186,7 @@ Resources:
   SSHSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Enable SSH access on port 21
+      GroupDescription: Enable SSH access on port 22
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -211,13 +213,25 @@ Resources:
         - IpProtocol: tcp 
           FromPort: 22
           ToPort: 22
-          SourceSecurityGroupId: !Ref SSHSecurityGroup
+          SourceSecurityGroupId: !Ref BastionHostSecurityGroup
       Tags:
         - Key: Name
           Value: Webserver Security Group
       VpcId: !Ref VPC
-
- 
+    
+  BastionHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from local machine to bastion host
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: Name
+          Value: Bastion Host Security Group
       
 ##########
 #Outputs
@@ -274,6 +288,11 @@ Outputs:
       Name: !Sub ${AWS::StackName}-WebServerSecurityGroup
     Value: !Ref WebServerSecurityGroup
     
+  BastionHostSecurityGroup:
+    Description: Bastion Host Security Group Id
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionHostSecurityGroup
+    Value: !Ref BastionHostSecurityGroup
   
       
       
