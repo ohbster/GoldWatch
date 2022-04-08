@@ -47,14 +47,19 @@ def lambda_handler(event, context):
     Alert_Active BOOLEAN DEFAULT 1
     );    
     ''')
+    #cursor.execute('''INSERT INTO GoldPrice (Day, High, Low, Current)
+    #VALUES (0000-00-00, 0.00, 0.00, 0.00);
+    #''')
+    
     cursor.execute('''INSERT INTO GoldPrice (Day, High, Low, Current)
-    VALUES (0000-00-00, 0.00, 0.00, 0.00);
+    VALUES (2022-10-01, 1.00, 2.00, 3.00);
     ''')
     cursor.execute('''SELECT * FROM GoldPrice''')
+    connection.commit();
     for row in cursor:
         print(row)
         logger.info(row)
-    
+            
     return {
         'statusCode': 200,
         'body': json.dumps({'message': 'Initializing GoldWatch',

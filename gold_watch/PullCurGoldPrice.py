@@ -59,9 +59,9 @@ def lambda_handler(event, context):
                "daily_high": f"{daily_high}",
                "daily_low": f"{daily_low}",
                "cur_price": f"{cur_price}",
-               "ENV": f"{os.environ['ENV']}",
-               "DBUSER": f"{os.environ['DBUSER']}",
-               "my_secret": f"{secret['Parameter']['Value']}"
+               #"ENV": f"{os.environ['ENV']}",
+               #"DBUSER": f"{os.environ['DBUSER']}",
+               #"my_secret": f"{secret['Parameter']['Value']}"
                #"my_secret": f"{secret}"
     
                })

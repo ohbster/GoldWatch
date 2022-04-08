@@ -217,7 +217,7 @@ Resources:
       - DatabaseSubnetGroup
     Properties:
       Engine: mysql
-      EngineVersion: 5.7
+      EngineVersion: 8.0.27
       SourceRegion: us-east-1
       AllocatedStorage: !Ref DatabaseAllocatedStorage
       AvailabilityZone:  !Select [ 0, !GetAZs '']
@@ -310,7 +310,28 @@ Resources:
             systemctl start httpd
             amazon-linux-extras enable php8.0
             yum clean metadata
-            yum install php-cli php-pdo php-fpm php-mysqlnd
+            yum install -y php-cli php-pdo php-fpm php-mysqlnd php-xml
+            #Create www group and make /var/www writable to www group
+            groupadd www
+            usermod -a -G www ec2-user
+            #chown -R root:www /var/www
+            chown -R root\:www /var/www #will colon cause problem in yaml?
+            chmod 2775 /var/www
+            find /var/www -type d -exec sudo chmod 2775 {} +
+            find /var/www -type f -exec sudo chmod 0664 {} +
+            
+            
+            #install composer for php
+            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+            php -r "if (hash_file('sha384', 'composer-setup.php') === '906a84df04cea2aa72f40b5f787e49f22d4c2f19492ac310e8cba5b96ac8b64115ac402c8cd292b8a03482574915d1a8') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
+            php composer-setup.php
+            php -r "unlink('composer-setup.php');"
+            mv composer.phar /usr/local/bin/composer
+            cd /var/www/html
+            composer require aws/aws-sdk-php
+            
+      IamInstanceProfile: !Ref WebServerInstanceProfile      
+            
       SecurityGroupIds:
         #- !Ref EC2InstanceSecurityGroup
         - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
@@ -328,8 +349,6 @@ Resources:
           #ami-03190fe20ef6b1419 (64-bit Arm)
       SubnetId: 
         Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
-      #Need to parameterize this
-      #KeyName: EC2 Tutorial
       KeyName: !Ref KeyName
       UserData: 
         Fn::Base64:
@@ -341,7 +360,6 @@ Resources:
             systemctl enable httpd
             systemctl start httpd
       SecurityGroupIds:
-        #- !Ref EC2InstanceSecurityGroup
         - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
       Tags:
         - Key: Name
@@ -360,6 +378,15 @@ Resources:
       Tags:
         - Key: Name
           Value: Bastion Host Instance
+  
+  #Iam Instance Profile to allow SSM
+  WebServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: gold-watch-WebserverInstanceProfile
+      Roles:
+        - !Ref EC2RoleForSSM
+    
   
   #This section creates role and System Manager resources to run commands to
   #ec2 instance for mailing alerts

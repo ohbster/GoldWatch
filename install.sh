@@ -8,7 +8,7 @@ then
 else
 
     sam build;
-    sam deploy --parameter-overrides KeyName=\""$1"\" --no-confirm-changeset
+    sam deploy --parameter-overrides KeyName=\""$1"\" --no-confirm-changeset --capabilities CAPABILITY_NAMED_IAM
 
 fi
 
