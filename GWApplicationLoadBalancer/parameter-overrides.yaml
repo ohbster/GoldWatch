@@ -1,0 +1,3 @@
+Parameters:
+  AcmCertificate: arn:aws:acm:us-east-1:378576100664:certificate/9b96446c-fe8e-478b-b20b-fc43a1ece21b
+  ExportVPCStackName: gw-network

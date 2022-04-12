@@ -20,9 +20,10 @@ or optionally
 sam build
 sam depoy --guided
 
-*Services Used by GoldWatch*
+*Services / Resources Used by GoldWatch*
 - CloudFormation
 - SAM
+- CodeDeploy
 - EC2
 - S3
 - RDS

@@ -9,26 +9,64 @@
 
 import json
 import requests
+import datetime
 import os
 import boto3
 import logging
 from botocore.exceptions import ClientError
 from get_parameter import *
+import pymysql
 
+client = boto3.client('ssm')
 
+#get database connection details from Parameter Store
+params = client.get_parameters(
+    Names=[
+        'gw-dbaddr',
+        'gw-dbname',
+        'gw-dbuser',
+        'gw-dbport',
+        'gw-dbpass'
+        ], WithDecryption=True
+    
+    )
+
+#get_parameters() does not return them in order.
+#This is a workaround to avoid potentially exposing db password 
+#Need to match the 'Name' key to correct variable.
+#Steps: 
+#1. Iterate through list
+#2. If 'Name' matches a case, apply 'Value' to a variable.
+
+for x in params['Parameters']:
+
+    if x['Name'] == 'gw-dbaddr':
+        rds_host = x['Value']
+    
+    elif x['Name'] == 'gw-dbname':
+        db_name = x['Value']
+        
+    elif x['Name'] == 'gw-dbuser':
+        username = x['Value']
+    
+    elif x['Name'] == 'gw-dbpass':
+        password = x['Value']
+        
+    elif x['Name'] == 'gw-dbport':
+        rds_port = x['Value'] 
+
+connection = pymysql.connect(host=rds_host, user=username, password=password, db=db_name)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
 
-
+    cursor = connection.cursor()
+    #get price data from public source
     response = requests.get("http://api.metals.live/v1/spot/gold")
     price_data = json.loads(response.text)
-    secret = get_parameter('mylilsecret', True)
-    
-    #price_data = None
-    
-    #need to verify data is good
-    
 
+    #need to verify data is good
     if price_data is None:
         return {"statusCode": 200,
                 "body": json.dumps({
@@ -37,12 +75,13 @@ def lambda_handler(event, context):
                     }
                     ),
             
-            }
+        }
     
-        
+    #initialize variables (to set the low's and highs)    
     daily_low = float(price_data[0]["price"])
     daily_high = float(price_data[0]["price"]) 
     cur_price = float(price_data[0]["price"])
+    day = datetime.datetime.now().strftime('%Y-%m-%d')
     
     
     for entry in price_data:
@@ -51,28 +90,33 @@ def lambda_handler(event, context):
             daily_high = cur_price
         elif cur_price < daily_low:
             daily_low = cur_price
+            
+            
+    #update the daily row 
+    sql = f'''INSERT INTO GoldPrice(Daystamp, High, Low, Current)
+    VALUES ('{day}', {daily_high}, {daily_low}, {cur_price})
+    ON DUPLICATE KEY UPDATE
+    High = {daily_high}, Low = {daily_low}, Current = {cur_price};
+    
+    '''
+    cursor.execute(sql)
+    connection.commit()
+    
+    for row in cursor:
+        print(row)
+        logger.info(row)
     
     return{ "statusCode": 200,
            "body": json.dumps({
-               "message": f"current price = {cur_price}" \
-               f" highest price = {daily_high}",
-               "daily_high": f"{daily_high}",
-               "daily_low": f"{daily_low}",
-               "cur_price": f"{cur_price}",
-               #"ENV": f"{os.environ['ENV']}",
-               #"DBUSER": f"{os.environ['DBUSER']}",
-               #"my_secret": f"{secret['Parameter']['Value']}"
-               #"my_secret": f"{secret}"
-    
+               "rds_host" : f"rds_host = {rds_host}",            
+               "dbname" : f"dbname = {db_name}",
+               "username" : f"dbuser = {username}",
+               "day" : f"day = {day}"
                })
         
         
         }
-"""    
-    print(f"highest price: {daily_high}")
-    print(f"lowest price: {daily_low}")
-    print(f"current price: {cur_price}")
-"""
+
 
 #assert that price is not None
 

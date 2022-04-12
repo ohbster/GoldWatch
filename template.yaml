@@ -27,6 +27,11 @@ Metadata:
           - MultiAZDatabase
 
 Parameters:
+  CodeDeployRolePolicy:
+    Type: String
+    Description: Role needed by CodeDeploy to deploy on EC2 instances
+    Default: arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole  
+
   EC2InstanceManagedPolicy:
     Type: String
     Description: ARN of the IAM Manage policy to allow SSM to mananage EC2 instances
@@ -405,7 +410,21 @@ Resources:
       Path: /
       ManagedPolicyArns: 
         - !Ref EC2InstanceManagedPolicy
-               
+  
+  EC2RoleForCodeDeploy:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref CodeDeployRolePolicy         
   
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -433,6 +452,11 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-WebServerInstance2
     Value: !Ref WebServerInstance2
+  EC2CodeDeployServiceRole:
+    Description: Arn for the EC2 CodeDeploy service role
+    Export:
+      Name: !Sub ${AWS::StackName}-EC2CodeDeployServiceRole
+    Value: !GetAtt EC2RoleForCodeDeploy.Arn
   #HelloWorldFunctionIamRole:
     #Description: "Implicit IAM Role created for Hello World function"
     #Value: !GetAtt HelloWorldFunctionRole.Arn

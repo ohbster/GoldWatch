@@ -86,7 +86,7 @@ Resources:
       HealthyThresholdCount: 2
       Matcher:
         HttpCode: 200,302
-      Name: GWWebServer
+      Name: GWWebServerTargetGroup
       Port: 80
       Protocol: HTTP
       Targets:
@@ -120,3 +120,10 @@ Outputs:
     Export:
       Name:  !Sub ${AWS::StackName}-ApplicationLoadBalancerZoneID 
     Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+    
+  ALBTargetGroupName:
+    Description: The Target Group Name property
+    Export:
+      Name: !Sub ${AWS::StackName}-ALBTargetGroupName
+    Value: !GetAtt ALBTargetGroup.TargetGroupName
+    

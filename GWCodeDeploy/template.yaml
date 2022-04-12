@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  GoldWatch
+
+  CodeDeploy to EC2 instance template
+
+#Metadata: 
+
+Parameters:
+  CodeDeployRolePolicy:
+    Type: String
+    Description: Role needed by CodeDeploy to deploy on EC2 instances
+    Default: arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+    
+  ExportEC2StackName:
+    Type: String
+    Description: The CodeDeploy Service Role Arn
+    Default: gold-watch
+
+  ExportALBStackName:
+    Type: String
+    Description: ALB Target Group Name
+    Default: gw-alb
+  
+  RevCommitId:
+    Description: The commit ID for the rev.
+    Type: String
+    Default: ee23e63b268f506646639ea4b8a9633159d646ab
+
+Resources: 
+  GoldWatchApp:
+    Type: AWS::CodeDeploy::Application
+    Properties: 
+      ApplicationName: goldwatch_www
+      ComputePlatform: Server
+      Tags: 
+        - Key: Name
+          Value: goldwatch_www
+          
+
+  AllAtOnce:
+    Type: AWS::CodeDeploy::DeploymentConfig
+    Properties: 
+      ComputePlatform: Server
+      DeploymentConfigName: gw_deployconfig
+      MinimumHealthyHosts: 
+        Type: HOST_COUNT 
+        Value: 1
+      #TrafficRoutingConfig: 
+      #  Type: AllAtOnce       
+        
+  DeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref GoldWatchApp
+      Deployment:
+        Description: Deploy the GoldWatch Website.
+        IgnoreApplicationStopFailures: True
+        Revision:
+          GitHubLocation:
+            CommitId: !Ref RevCommitId 
+            Repository: ohbster/GoldWatch_WWW
+          RevisionType: GitHub
+            
+      DeploymentConfigName: !Ref AllAtOnce
+      DeploymentGroupName: GoldWatchDeploymentGroup #Adding a name means you cannot make changes to this resource without deleting 
+      DeploymentStyle:
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+        DeploymentType: IN_PLACE
+#      Ec2TagSet:
+#        Ec2TagGroup:
+#       - Key: Name
+#         Value: Gold Watch WebServer Instance
+#          Type: KEY_AND_VALUE
+#        - Key: Name
+#          Value: Gold Watch WebServer Instance 2
+#          Type: KEY_AND_VALUE
+          
+      LoadBalancerInfo: 
+         TargetGroupInfoList: 
+           - Name: 
+               Fn::ImportValue: !Sub ${ExportALBStackName}-ALBTargetGroupName
+        
+        
+      ServiceRoleArn: 
+        Fn::ImportValue: !Sub ${ExportEC2StackName}-EC2CodeDeployServiceRole
+    
+      
+      
+#Outputs: 
