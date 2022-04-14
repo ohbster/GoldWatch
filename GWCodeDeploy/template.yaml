@@ -25,10 +25,10 @@ Parameters:
   RevCommitId:
     Description: The commit ID for the rev.
     Type: String
-    Default: ee23e63b268f506646639ea4b8a9633159d646ab
+    Default: 85f8907a8a77223c224009dbd8513678f3c4160a
 
 Resources: 
-  GoldWatchApp:
+  GoldWatchWwwApp:
     Type: AWS::CodeDeploy::Application
     Properties: 
       ApplicationName: goldwatch_www
@@ -36,7 +36,15 @@ Resources:
       Tags: 
         - Key: Name
           Value: goldwatch_www
-          
+
+#  CodeBuildSourceCredential:
+#    Type: AWS::CodeBuild::SourceCredential
+#    Properties:
+#      AuthType: PERSONAL_ACCESS_TOKEN
+#      ServerType: GITHUB
+#      Token: "{{resolve:ssm-secure:gw-githubauthtoken:1}}"
+      
+            
 
   AllAtOnce:
     Type: AWS::CodeDeploy::DeploymentConfig
@@ -52,7 +60,7 @@ Resources:
   DeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
-      ApplicationName: !Ref GoldWatchApp
+      ApplicationName: !Ref GoldWatchWwwApp
       Deployment:
         Description: Deploy the GoldWatch Website.
         IgnoreApplicationStopFailures: True
@@ -67,15 +75,7 @@ Resources:
       DeploymentStyle:
         DeploymentOption: WITH_TRAFFIC_CONTROL
         DeploymentType: IN_PLACE
-#      Ec2TagSet:
-#        Ec2TagGroup:
-#       - Key: Name
-#         Value: Gold Watch WebServer Instance
-#          Type: KEY_AND_VALUE
-#        - Key: Name
-#          Value: Gold Watch WebServer Instance 2
-#          Type: KEY_AND_VALUE
-          
+
       LoadBalancerInfo: 
          TargetGroupInfoList: 
            - Name: 

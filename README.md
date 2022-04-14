@@ -13,7 +13,8 @@ to avoid incurring charges by using a subnetgroup and multi-az instances running
 
 - Currently broken so wait before deploying
 To deploy, clone this repo and do:
-./install.sh
+
+./install.sh for each stack. The install will be much cleaner in time. Now it is messy.
 
 or optionally
 
@@ -22,6 +23,8 @@ sam depoy --guided
 
 *Services / Resources Used by GoldWatch*
 - CloudFormation
+- CodeBuild / CodeDeploy / CodePipeline
+- GitHub
 - SAM
 - CodeDeploy
 - EC2
@@ -33,6 +36,21 @@ sam depoy --guided
 - ACM
 - SES
 - EventBridge
+
+*Languages Used*
+- Python
+- PHP
+- HTML
+- Bash Scripting
+
+*TODO*
+- Allow people to create and receive price alerts by email
+- Create function to mail contacts when a price exeeds a target limit
+- Complete CodeBuild stack
+- Complete CodeDeploy stack
+- Complete CodePipeline stack
+- Clean up install
+
 
 *Sources*
 Tutorials that helped me learn CloudFormation and extremely helpful in helping me create this app.

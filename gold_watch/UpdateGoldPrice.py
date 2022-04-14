@@ -106,6 +106,7 @@ def lambda_handler(event, context):
         print(row)
         logger.info(row)
     
+    
     return{ "statusCode": 200,
            "body": json.dumps({
                "rds_host" : f"rds_host = {rds_host}",            
@@ -114,8 +115,9 @@ def lambda_handler(event, context):
                "day" : f"day = {day}"
                })
         
-        
+      
         }
+    
 
 
 #assert that price is not None

@@ -36,7 +36,55 @@ Parameters:
     Type: String
     Description: ARN of the IAM Manage policy to allow SSM to mananage EC2 instances
     Default: arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
-
+  
+  WebServerUserData:
+    Type: String
+    Description: User data for creation of webserver instances
+    Default: |
+      
+            #!/bin/bash
+            #update yum, install php, apache, and jq
+            yum update -y
+            yum amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            yum install -y httpd
+            systemctl enable httpd
+            
+            amazon-linux-extras enable php8.0
+            yum clean metadata
+            yum install -y php-cli php-pdo php-fpm php-mysqlnd php-xml
+            #install jq to manipulate json from bash. This makes it easier to create the config
+            #file /etc/goldwatch/gwconfig which will keep the database login info. It is chmod 640 
+            #belonging to apache group and owned by root. Only admin and apache can view login credentials
+            yum install -y jq
+            
+            #Create www group and make /var/www writable to www group
+            groupadd www
+            usermod -a -G www ec2-user
+            #chown -R root:www /var/www
+            chown -R root:www /var/www #will colon cause problem in yaml?
+            chmod 2775 /var/www
+            find /var/www -type d -exec sudo chmod 2775 {} +
+            find /var/www -type f -exec sudo chmod 0664 {} +
+            #goldwatch setting directery
+            mkdir /etc/goldwatch
+            chown root:apache goldwatch
+            chmod 755 goldwatch
+            echo '[{"hostname":"x", "dbname":"x", "username":"x","password":"x" }]' | cat > dbconfig.json
+            chmod 640 /etc/goldwatch/dbconfig.json
+            
+            #install composer for php
+            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+            php -r "if (hash_file('sha384', 'composer-setup.php') === '906a84df04cea2aa72f40b5f787e49f22d4c2f19492ac310e8cba5b96ac8b64115ac402c8cd292b8a03482574915d1a8') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
+            php composer-setup.php
+            php -r "unlink('composer-setup.php');"
+            mv composer.phar /usr/local/bin/composer
+            cd /var/www/html
+            composer require aws/aws-sdk-php
+            
+            #start apache after php
+            systemctl start httpd
+            
+  
   ExportVpcStackName:
     Description: The name of the vpc stack that exports values
     Type: String
@@ -145,7 +193,7 @@ Resources:
       Runtime: python3.9
       Architectures:
         - x86_64
-      Events:
+      Events: #this ara may need to be clipped. Not needed and should not be executed more than once.
         Init:
           Type: Api 
           Properties:
@@ -161,22 +209,22 @@ Resources:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2
             
-  GetDateFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: gold_watch/
-      Handler: date.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-      Events:
-        GetDate:
-          Type: Api
-          Properties:
-            Path: /date
-            Method: get
+# GetDateFunction:
+#  Type: AWS::Serverless::Function
+#    Properties:
+#      CodeUri: gold_watch/
+#      Handler: date.lambda_handler
+#      Runtime: python3.9
+#      Architectures:
+#       - x86_64
+#      Events:
+#        GetDate:
+#          Type: Api
+#          Properties:
+#            Path: /date
+#            Method: get
             
-  PullCurGoldPrice:
+  UpdateGoldPrice:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: gold_watch/
@@ -188,21 +236,38 @@ Resources:
             Action:
               - ssm:GetParameters
               - ssm:GetParameter
-            Resource: '*'       
-      Environment:
-        Variables:
-          ENV: 'dev'
-          DBUSER: "{{resolve:ssm:gw-dbuser:1}}"
-      Handler: PullCurGoldPrice.lambda_handler
+              
+            Resource: '*'  
+            
+#        - Statement:
+#          - Sid: InvokeLambdaFunction
+#            Effect: Allow
+#            Action: lambda:InvokeFunction
+#            Resource: '*'                        
+#            Principal:
+#              - Service: events.amazonaws.com
+#            Condition:
+#              ArnLike:
+#                AWS:SourceArn: !GetAtt UpdateGoldPriceRule.Arn   
+            
+        
+        
+                  
+      #Environment:
+        #Variables:
+          #ENV: 'dev'
+          #DBUSER: "{{resolve:ssm:gw-dbuser:1}}"
+      Handler: UpdateGoldPrice.lambda_handler
       Runtime: python3.9
       Architectures:
         - x86_64     
       Events:
-        GetDate:
-          Type: Api
+        RateEvent:
+          Type: Schedule
           Properties:
-            Path: /pullcurgoldprice
-            Method: get
+            Schedule: 'rate(5 minutes)'
+            Name: RateSchedule
+            Description: Trigger UpdateGoldPrice lambda function every 5 mins
       VpcConfig:
         SecurityGroupIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
@@ -211,6 +276,24 @@ Resources:
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2      
+           
+#  LambdaEventBridgePolicy:    
+#    Type: AWS::IAM::Policy
+#   Properties: 
+#      PolicyDocument:
+#        Version: "2012-10-17"
+#        Principal: events.amazonaws.com
+#        Statement:
+ #         - Effect: Allow
+ #           Action:
+ #             - 'lambda:InvokeFunction'
+ #           Resource: '*'
+ #     PolicyName: LambdaAllowUpdatePriceRule
+ #     Roles: 
+ #       - !Ref LambdaRoleForEventBridge
+#        Users: 
+#          - String
+        
            
 ##########
 #Db    
@@ -277,7 +360,7 @@ Resources:
   UpdateGoldPriceRule:
     Type: AWS::Events::Rule
     Properties:
-      Description: EventBridge rule to run the pullcurgoldprice lambda function
+      Description: EventBridge rule to run the UpdateGoldPrice lambda function
       Name: UpdateGoldPriceRule
       ScheduleExpression: rate(5 minutes)
       State: ENABLED
@@ -285,7 +368,7 @@ Resources:
         - 
           Arn:
             Fn::GetAtt:
-              - "PullCurGoldPrice"
+              - "UpdateGoldPrice"
               - "Arn"
           Id: "UpdateGoldPriceTarget1"
 
@@ -305,38 +388,8 @@ Resources:
       KeyName: !Ref KeyName
       #Need to parameterize this
       UserData: 
-        Fn::Base64:
-          !Sub |
-            #!/bin/bash
-            yum update -y
-            yum amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
-            yum install -y httpd
-            systemctl enable httpd
-            systemctl start httpd
-            amazon-linux-extras enable php8.0
-            yum clean metadata
-            yum install -y php-cli php-pdo php-fpm php-mysqlnd php-xml
-            #Create www group and make /var/www writable to www group
-            groupadd www
-            usermod -a -G www ec2-user
-            #chown -R root:www /var/www
-            chown -R root\:www /var/www #will colon cause problem in yaml?
-            chmod 2775 /var/www
-            find /var/www -type d -exec sudo chmod 2775 {} +
-            find /var/www -type f -exec sudo chmod 0664 {} +
-            
-            
-            #install composer for php
-            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-            php -r "if (hash_file('sha384', 'composer-setup.php') === '906a84df04cea2aa72f40b5f787e49f22d4c2f19492ac310e8cba5b96ac8b64115ac402c8cd292b8a03482574915d1a8') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
-            php composer-setup.php
-            php -r "unlink('composer-setup.php');"
-            mv composer.phar /usr/local/bin/composer
-            cd /var/www/html
-            composer require aws/aws-sdk-php
-            
-      IamInstanceProfile: !Ref WebServerInstanceProfile      
-            
+        Fn::Base64: !Ref WebServerUserData               
+      IamInstanceProfile: !Ref WebServerInstanceProfile                
       SecurityGroupIds:
         #- !Ref EC2InstanceSecurityGroup
         - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
@@ -356,14 +409,7 @@ Resources:
         Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
       KeyName: !Ref KeyName
       UserData: 
-        Fn::Base64:
-          !Sub |
-            #!/bin/bash
-            yum update -y
-            yum amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
-            yum install -y httpd
-            systemctl enable httpd
-            systemctl start httpd
+        Fn::Base64: !Ref WebServerUserData     
       SecurityGroupIds:
         - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
       Tags:
@@ -426,6 +472,22 @@ Resources:
       ManagedPolicyArns:
         - !Ref CodeDeployRolePolicy         
   
+#  LambdaRoleForEventBridge:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      AssumeRolePolicyDocument: 
+#        Version: "2012-10-17"
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service:
+#                - events.amazonaws.com
+#            Action:
+#              - 'sts:AssumeRole'
+#      Path: /
+
+  
+  
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
@@ -436,12 +498,12 @@ Outputs:
   GetDateApi:
     Description: "Api Gateway endpoint URL for Prod stage for GetDate function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/date/" 
-  PullCurGoldPriceApi:
+  UpdateGoldPriceApi:
     Description: "Api Gateway endpoint URL for Prod stage for GetCurGoldPrice function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/pullcurgoldprice/"
-  GetDateFunction:
-    Description: "Get date lambda function ARN"
-    Value: !GetAtt GetDateFunction.Arn
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/UpdateGoldPrice/"
+#  GetDateFunction:
+#    Description: "Get date lambda function ARN"
+#    Value: !GetAtt GetDateFunction.Arn
   WebServerInstance:
     Description: Instance Id for the Web/Mail server
     Export:
