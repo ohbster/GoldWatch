@@ -21,6 +21,29 @@ or optionally
 sam build
 sam depoy --guided
 
+*Purpose*
+This is my first project using AWS. On the surface, it displays daily spot prices for an ounce of Gold in USD. Underneath, it was meant to develop my understanding of many services including:
+- Creating CloudFormation /SAM stacks (created in yaml and deployed from AWS CLI using simple bash scripts)
+- VPC (diagram here: https://github.com/ohbster/GoldWatch/blob/master/GoldWatch%20VPC.jpg )
+- EC2 instances in multiple availability zones behind an application load balancer
+- Apache webserver's with PHP running on Amazon Linux
+- Lambda functions written in python and triggered via an EventBridge rule
+- Parameter store with secret strings for storing database connection info
+- RDS MySQL instance
+- Route 53 managed domain pointing to ALB
+- ACM public SSL certificate
+- CodeBuild, CodeDeploy and CodePipeline using GitHub for automated deployment
+
+This is an on going hobby project. Next plans are to integrate SES and contact lists to allow automated email alerts when price reaches set targets, and to display charts using historical data from the database.
+I am very open to hearing any critique / suggestions that can help me to improve.
+Obijah
+ohbster@protonmail.com
+
+Repositories:
+https://github.com/ohbster/GoldWatch
+https://github.com/ohbster/GoldWatch_WWW
+
+
 *Services / Resources Used by GoldWatch*
 - CloudFormation
 - CodeBuild / CodeDeploy / CodePipeline
