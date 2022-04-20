@@ -275,7 +275,40 @@ Resources:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2      
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
+          
+  CheckAlerts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter            
+            Resource: '*'  
+      Handler: CheckAlerts.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64     
+      #Events:
+      #  RateEvent:
+      #    Type: Schedule
+      #    Properties:
+      #      Schedule: 'rate(5 minutes)'
+      #      Name: RateSchedule
+      #      Description: Trigger CheckAlerts lambda function every 5 mins
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2    
            
 #  LambdaEventBridgePolicy:    
 #    Type: AWS::IAM::Policy

@@ -15,47 +15,10 @@ import boto3
 import logging
 from botocore.exceptions import ClientError
 from get_parameter import *
+from get_connection import *
 import pymysql
 
-client = boto3.client('ssm')
-
-#get database connection details from Parameter Store
-params = client.get_parameters(
-    Names=[
-        'gw-dbaddr',
-        'gw-dbname',
-        'gw-dbuser',
-        'gw-dbport',
-        'gw-dbpass'
-        ], WithDecryption=True
-    
-    )
-
-#get_parameters() does not return them in order.
-#This is a workaround to avoid potentially exposing db password 
-#Need to match the 'Name' key to correct variable.
-#Steps: 
-#1. Iterate through list
-#2. If 'Name' matches a case, apply 'Value' to a variable.
-
-for x in params['Parameters']:
-
-    if x['Name'] == 'gw-dbaddr':
-        rds_host = x['Value']
-    
-    elif x['Name'] == 'gw-dbname':
-        db_name = x['Value']
-        
-    elif x['Name'] == 'gw-dbuser':
-        username = x['Value']
-    
-    elif x['Name'] == 'gw-dbpass':
-        password = x['Value']
-        
-    elif x['Name'] == 'gw-dbport':
-        rds_port = x['Value'] 
-
-connection = pymysql.connect(host=rds_host, user=username, password=password, db=db_name)
+connection = get_connection()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -83,14 +46,46 @@ def lambda_handler(event, context):
     cur_price = float(price_data[0]["price"])
     day = datetime.datetime.now().strftime('%Y-%m-%d')
     
+    #get the most recent time_stamp in Historical_Data and use as point
+    #to continue adding data.  
+    cursor.execute('''SELECT MAX(Time_Stamp) FROM Historical_Data;''')
+    connection.commit()
+    row = cursor.fetchone() #should only be one row from using MAX
+    if row[0] is None:
+        last_time_stamp = 0 
+    else:
+        last_time_stamp = int(row[0])
     
+    #Statement to insert historical data into table  
+    insert_statement = "INSERT INTO Historical_Data (Price, Time_Stamp) VALUES "
+    values = ""
+         
+    
+    #find the 24hour low, high, and current price
     for entry in price_data:
         cur_price = float(entry["price"])
         if cur_price > daily_high:
             daily_high = cur_price
         elif cur_price < daily_low:
             daily_low = cur_price
-            
+        #test if entry timestamp is greatter than time_stamp
+        #if so add to insert statement 
+        
+        if (int(entry["timestamp"]) > last_time_stamp) :
+            values += f'''({entry["price"]},{entry["timestamp"]})'''
+            #If the current entry is not the last, insert a comma between values
+            if entry["timestamp"] != price_data[-1]["timestamp"] :
+                values += ','
+    #make sure values is not null
+    if values == "":
+        #do nothing
+        print("No new data to insert to Historiac table")
+    else:
+        values += ';'
+        hd_sql  = insert_statement + values  
+        print (hd_sql)
+        cursor.execute(hd_sql)
+        cursor.commit()             
             
     #update the daily row 
     sql = f'''INSERT INTO GoldPrice(Daystamp, High, Low, Current)
@@ -109,9 +104,7 @@ def lambda_handler(event, context):
     
     return{ "statusCode": 200,
            "body": json.dumps({
-               "rds_host" : f"rds_host = {rds_host}",            
-               "dbname" : f"dbname = {db_name}",
-               "username" : f"dbuser = {username}",
+               "sql" : f"sql = {sql}",
                "day" : f"day = {day}"
                })
         
