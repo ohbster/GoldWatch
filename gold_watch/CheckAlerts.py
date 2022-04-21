@@ -90,10 +90,13 @@ def lambda_handler(context, event):
     #***************    
     #***DEBUGGING***
     #*************** 
+    
+    '''
     else:
         print("Data List: ")
         for entry in data_list:
             print(f"{entry[PRICE]},{entry[TIME_STAMP]}\n")
+            '''
             #Sort the results by price
             #Sort the alerts by oldest first. If oldies has not been triggered. Go to next oldest 
             #skip unnecessary prices(older timestamps)
@@ -120,7 +123,7 @@ def lambda_handler(context, event):
         
     return{ "statusCode": 200,
            "body": json.dumps({
-               "message" : f"{count} Alerts triggered",
+               "message" : f"{count} Alerts triggered", #Can trash this
                
                })
         
@@ -136,25 +139,33 @@ def get_trigger_list(_data_list, _alert_list):
     ctr = 0 #counter used to iterate through _alert_list
     
     for data_point in _data_list: #Do this until _alert_list[ctr][lastchecked]. Then untab sections below 
+        print("MainLoop")
         if float(data_point[PRICE]) > float(highest_price):
             #check for a new highest price
             highest_price = data_point[PRICE]
         
         #-----> Tab Over          
         #track of alerts
-        #check if most recent spot data_point is after an alert has been created
+        #check if most recent spot data_point is BEFORE an alert has been created
         #go next in _alert_list. alert is too recent to have been triggered
         while(ctr < len(_alert_list)) and (int(data_point[TIME_STAMP]) < int(_alert_list[ctr][LAST_CHECKED])):
+            print(f"InnerLoop1: ctr = {ctr}; data_point[TIME_STAMP] = {data_point[TIME_STAMP]}; _alert_list[ctr][LAST_CHECKED] = {_alert_list[ctr][LAST_CHECKED]}")
             #update the Last_Checked attribute to avoid "double dipping" historic data 
             #next time CheckAlerts gets triggered
             '''Cant assign tuples'''
             '''Add to a list or SQL'''
             #_alert_list[ctr][LAST_CHECKED] = data_point[TIME_STAMP]
-            ctr += 1           
+            ctr += 1   
+            
+        #while not end of alert list and data point is newer than alert            
         while (ctr < len(_alert_list)) and (int(data_point[TIME_STAMP]) > int(_alert_list[ctr][LAST_CHECKED])):
+            print(f"InnerLoop2: ctr = {ctr}; data_point[TIME_STAMP] = {data_point[TIME_STAMP]} _alert_list[ctr][LAST_CHECKED = {_alert_list[ctr][LAST_CHECKED]}")
             #if target price has been reached
+            print(f"highest_price = {highest_price}; _alert_list[{ctr}][PRICE_TARGET]= {_alert_list[ctr][PRICE_TARGET]}")
             if float(highest_price) > float(_alert_list[ctr][PRICE_TARGET]):
                 #add this alert to the trigger
+                print(f"Adding alert to list: Email = {_alert_list[ctr][EMAIL]}, Price_Target={_alert_list[ctr][PRICE_TARGET]}")
+                print(f"highest_price={highest_price}, Time_Stamp = {data_point[TIME_STAMP]}")
                 trigger_list.append(_alert_list[ctr])
                 #deactivate the alert
                 '''Cant assign tuples'''
@@ -164,12 +175,24 @@ def get_trigger_list(_data_list, _alert_list):
                 '''Cant assign tuples'''
                 '''Add to a list or to SQL'''
                 #_alert_list[ctr][LAST_CHECKED] = data_point[TIME_STAMP]
-            #else:
-                #next(data_point)
-            ctr += 1
+                ctr+=1
+            #else, try the next data point until data_point is older than current alert
+            else:
+                break   
             
+            #else:
+            #    break #if price is not greater, try the next data_point
+            '''
+            #!!problem as this below doesnt update highest price variable
+            elif int (next(data_point))[TIME_STAMP] < int (_alert_list[ctr][LAST_CHECKED]):#Try the next datapoint
+            #how to ensure that we go next loop only if the data_point is older than alert??
+                ctr += 1
+                break #does this skip ahead on the next iteration? I think it does
+            '''
     #Must update alert table rows with new Last_Checked values. 
     #Also send all alerts that need to be triggered to SQS for processing.
-            
-            
-        return trigger_list   
+    print(f"Highest price in data is :{highest_price}")              
+    return trigger_list   
+    
+     
+    

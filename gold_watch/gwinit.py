@@ -73,11 +73,6 @@ def lambda_handler(event, context):
     
     #cursor.execute('''SELECT * FROM GoldPrice''')
     
-    
-    #multiplic the UNIX_TIMESTAMP by 1000 since price data is in milliseconds
-    cursor.execute('''INSERT INTO Alerts_High (Email, Price_Target, Alert_Active, Time_Created, Last_Checked)
-    VALUES ('lvnlearn@gmail.com', 2000, TRUE, UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000); ''')
-    
     cursor.execute('''SELECT * FROM Alerts_High;''')
     connection.commit()
     
