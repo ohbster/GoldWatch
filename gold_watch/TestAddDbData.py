@@ -24,6 +24,25 @@ def lambda_handler(context, event):
     cursor.execute(sql)
     connection.commit()
     
+    sql = '''UPDATE Alerts_High
+    SET Price_Target = (CASE WHEN Email = 'goldwatchtest002@mailinator.com' THEN 1999.00
+                        WHEN Email = 'goldwatchtest004@mailinator.com' THEN 2000.00
+                        ELSE Price_Target
+                        END),
+        Time_Created = 1
+    ;''' #The ELSE Price_Target makes sure the update default to the original value instead of putting null values 
+    #where the case doesn't match.
+    cursor.execute(sql)
+    connection.commit()
+    
+    cursor.execute('''SELECT * FROM Alerts_High    
+    ;''')
+    connection.commit()
+    results = cursor.fetchall()
+    for result in results:
+        print(f"Email:{result[0]} | Price_Target:{result[1]} | Alert_Active:{result[2]} | Time_Created:{result[3]} | Last_checked:{result[4]}")
+    
+    
     return{ "statusCode": 200,
            "body": json.dumps({
                "sql" : f"sql = {sql}",

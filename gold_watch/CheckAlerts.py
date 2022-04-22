@@ -108,12 +108,34 @@ def lambda_handler(context, event):
     elif (len(alert_list)) is 0:
         print("Empty alert_list")
     else:
-        triggers = get_trigger_list(spot_prices, alert_list)
+        #First Time_Stamp. Will update all Last_Checked values using this
+        first_time_stamp = spot_prices[0][TIME_STAMP]
+        triggers = get_trigger_list(spot_prices, alert_list)   
+           
+        
+        
         
         #check if the function returned any alerts to trigger
         if triggers is None:
             print("No alerts were triggered")
         else:
+            #join results of SELECT FROM Alerts_High WHERE Alert_Active = 1
+            
+            #Must update alert table rows with new Last_Checked values. 
+            sql = f'''UPDATE Alerts_High
+            SET Alert_Active = (CASE '''
+            #this will create a case for every triggered alert to deactivate them
+            for triggered in triggers:
+                sql +=f''' WHEN Email = '{triggered[EMAIL]}' AND Time_Created = {triggered[TIME_CREATED]} THEN 0'''                             
+            sql +=(f''' ELSE Alert_Active
+            END),
+            Last_Checked = {first_time_stamp} 
+            WHERE Alert_Active = 1
+            ;''')
+            cursor.execute(sql)
+            connection.commit()
+            
+            #debug
             for trigger in triggers:
                 print(f'Target reached: {trigger[PRICE_TARGET]}:{trigger[LAST_CHECKED]}')
         
@@ -123,17 +145,26 @@ def lambda_handler(context, event):
                })
         }
 #this function is for the high alerts
-
 def get_trigger_list(_spot_prices, _alert_list):
     #get the most recent spot data_point from datalist
-    #test lists are greater than length 0
-    #highest_price = _spot_prices[0][PRICE]
+    
+    #**************************************************
+    #****** test lists are greater than length 0 ******
+    #**************************************************
+
+
     highest_price = -1 
+    #Return this list to handler
     trigger_list = []
+    #internal list for updating tuples
+    update_alerts_list = []
+    
     ctr = 0 #counter used to iterate through _alert_list
     
     
     for alert in _alert_list:
+        #keep track of the starting spot price being process
+        
         #make sure to only check alerts created (and by proxy, last checked) before the spot prices occur
         while int((_spot_prices[ctr][TIME_STAMP]) > int(alert[LAST_CHECKED])):
             #Check if this spot price is the highest price scanned so far
@@ -149,11 +180,14 @@ def get_trigger_list(_spot_prices, _alert_list):
                 ctr+=1
             #if for some reason, reached the end of spot prices with some alerts left. Just keep checking alerts
             else:
+                #update_alerts_list.append([(alert[PRICE_TARGET],alert[LAST_CHECKED]), alert[EMAIL], alert[ALERT_ACTIVE],])
                 break
                 
                 
 
-    #Must update alert table rows with new Last_Checked values. 
+
+    
+    
     #Also send all alerts that need to be triggered to SQS for processing.
     print(f"Highest price in data is :{highest_price}")              
     return trigger_list   
