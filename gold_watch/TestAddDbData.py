@@ -10,7 +10,8 @@ def lambda_handler(context, event):
     #insert values into Alerts_High
     cursor = connection.cursor()
     
-    cursor.execute('DROP TABLE IF EXISTS Alerts_High')
+        
+    cursor.execute('TRUNCATE TABLE Alerts_High;')
     sql = '''INSERT INTO Alerts_High 
     (Email, Price_Target, Time_Created, Last_Checked)
     VALUES 
@@ -18,9 +19,7 @@ def lambda_handler(context, event):
     ('goldwatchtest002@mailinator.com', 2020.00, 0, 1650401934910),
     ('goldwatchtest003@mailinator.com', 1980.00, 0, 1650405775114),
     ('goldwatchtest004@mailinator.com', 2010.00, 0, 1650406074791)
-    ON DUPLICATE KEY UPDATE
-    SET Last_Checked = EXCLUDED.Last_Checked
-    
+  
     ; '''
     cursor.execute(sql)
     connection.commit()

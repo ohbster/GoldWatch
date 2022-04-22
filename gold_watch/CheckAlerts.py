@@ -15,22 +15,33 @@ sends them to SQS to be process (Email delivery, etc)
 
 How: 
 1) First it selects all the currently active alerts in Alerts table.
-2) Then it takes not of the oldest active alert by copying the Last_Checked attribute.
+2) Then it takes note of the oldest active alert by copying the Last_Checked attribute.
    By using last checked instead of Time_Created it avoids doing necessary repeat work
    as it will only evaluate each alert to each entry in Historical_Data once and only one
-   time.
+   time. After the alerts are checked, there Last_Checked value will be updated with a
+   recent timestamp where it will continue during the next scan, ignoring older data.
 3) Next, it selects all the historical data in descending order from most recent that 
    were created after the oldest active alert. This is avoid processing any data that 
    is A) created before any alerts were created and B)Already evaulated against the alert
    This avoids unnecessary work
-4) In get_trigger_list, a variable highest_price is initiated to the most recent spot
-   price in data_list (from Historical_Data table). Since the data_list and alert_list
+4) In get_trigger_list, a variable highest_price is initiated to -1. Since the data_list and alert_list
    are in chronological order from newer to older, keeping track of the highest price 
-   is a useful since we will know any any target_price that is lower and older
-   has been hit.
-5) The first part of the get_trigger_list main loop compares the currently evaulated
-   data_point (each tuple in Historical_Data) to keep track of the highest price.  
-6) 
+   is a useful since we will know any target_price has been hit if it is lower and older than a spot 
+   price.
+5) The first part of the get_trigger_list main loop iterates through each alert in _alert_list
+6) The next inner while loop ensure that only spot prices newer than the alert will trigger an alert.
+   If the spot price is older, the outer loop will select and older alert to evaluate.
+7) If the spot price is valid, check to see if it's price is the current highest price. If so, assign it to
+   highest_price
+8) Next, check to see if the highest_price is greater than the alert. If so, add the alert to the trigger_list
+   (We know the spot price happened after the alert because they are both in chronological order)
+9) If the price is not greater, then go to the next spot price in _spot_prices by increasing counter 'ctr'. 
+   First check that increasing will not go out of bounds.
+10)If for some reason, increasing ctr will go out of bounds in _spot_prices, then this is the last spot price. 
+   Compare this price to the rest of the alerts and end the loop.
+11)Update all the Last_Checked values. 
+12)Any alert that was triggered needs to be deactivated by switching ACTIVE to 0
+13)Return the trigger list
 
 
 '''
@@ -83,36 +94,21 @@ def lambda_handler(context, event):
     ORDER BY Time_Stamp DESC    
     ;''')
     connection.commit()
-    data_list = cursor.fetchall()
-    if data_list is None:
+    spot_prices = cursor.fetchall()
+    if spot_prices is None:
         print("No results")
         
     #***************    
     #***DEBUGGING***
     #*************** 
     
-    '''
-    else:
-        print("Data List: ")
-        for entry in data_list:
-            print(f"{entry[PRICE]},{entry[TIME_STAMP]}\n")
-            '''
-            #Sort the results by price
-            #Sort the alerts by oldest first. If oldies has not been triggered. Go to next oldest 
-            #skip unnecessary prices(older timestamps)
-            #if a price in results is greater than target price in alerts list and happened after
-            #the alert was created then trigger alert
-            #- Trigger the alert. Remove alert from results
-            #if not go to next price
-            #- Since highest price triggered, we no all other
-    
     #make sure to update all last checked values for each alert  
-    if (len(data_list)) is 0:
+    if (len(spot_prices)) is 0:
         print("Empty datalist")
     elif (len(alert_list)) is 0:
         print("Empty alert_list")
     else:
-        triggers = get_trigger_list(data_list, alert_list)
+        triggers = get_trigger_list(spot_prices, alert_list)
         
         #check if the function returned any alerts to trigger
         if triggers is None:
@@ -123,72 +119,40 @@ def lambda_handler(context, event):
         
     return{ "statusCode": 200,
            "body": json.dumps({
-               "message" : f"{count} Alerts triggered", #Can trash this
-               
+               "message" : f"{count} Alerts triggered", #Can trash this      
                })
-        
-      
         }
 #this function is for the high alerts
 
-def get_trigger_list(_data_list, _alert_list):
+def get_trigger_list(_spot_prices, _alert_list):
     #get the most recent spot data_point from datalist
     #test lists are greater than length 0
-    highest_price = _data_list[0][PRICE] 
+    #highest_price = _spot_prices[0][PRICE]
+    highest_price = -1 
     trigger_list = []
     ctr = 0 #counter used to iterate through _alert_list
     
-    for data_point in _data_list: #Do this until _alert_list[ctr][lastchecked]. Then untab sections below 
-        print("MainLoop")
-        if float(data_point[PRICE]) > float(highest_price):
-            #check for a new highest price
-            highest_price = data_point[PRICE]
-        
-        #-----> Tab Over          
-        #track of alerts
-        #check if most recent spot data_point is BEFORE an alert has been created
-        #go next in _alert_list. alert is too recent to have been triggered
-        while(ctr < len(_alert_list)) and (int(data_point[TIME_STAMP]) < int(_alert_list[ctr][LAST_CHECKED])):
-            print(f"InnerLoop1: ctr = {ctr}; data_point[TIME_STAMP] = {data_point[TIME_STAMP]}; _alert_list[ctr][LAST_CHECKED] = {_alert_list[ctr][LAST_CHECKED]}")
-            #update the Last_Checked attribute to avoid "double dipping" historic data 
-            #next time CheckAlerts gets triggered
-            '''Cant assign tuples'''
-            '''Add to a list or SQL'''
-            #_alert_list[ctr][LAST_CHECKED] = data_point[TIME_STAMP]
-            ctr += 1   
-            
-        #while not end of alert list and data point is newer than alert            
-        while (ctr < len(_alert_list)) and (int(data_point[TIME_STAMP]) > int(_alert_list[ctr][LAST_CHECKED])):
-            print(f"InnerLoop2: ctr = {ctr}; data_point[TIME_STAMP] = {data_point[TIME_STAMP]} _alert_list[ctr][LAST_CHECKED = {_alert_list[ctr][LAST_CHECKED]}")
-            #if target price has been reached
-            print(f"highest_price = {highest_price}; _alert_list[{ctr}][PRICE_TARGET]= {_alert_list[ctr][PRICE_TARGET]}")
-            if float(highest_price) > float(_alert_list[ctr][PRICE_TARGET]):
-                #add this alert to the trigger
-                print(f"Adding alert to list: Email = {_alert_list[ctr][EMAIL]}, Price_Target={_alert_list[ctr][PRICE_TARGET]}")
-                print(f"highest_price={highest_price}, Time_Stamp = {data_point[TIME_STAMP]}")
-                trigger_list.append(_alert_list[ctr])
-                #deactivate the alert
-                '''Cant assign tuples'''
-                '''Add to a list or to SQL'''
-                #_alert_list[ctr][ALERT_ACTIVE] = 0 
-                #check the next alert
-                '''Cant assign tuples'''
-                '''Add to a list or to SQL'''
-                #_alert_list[ctr][LAST_CHECKED] = data_point[TIME_STAMP]
+    
+    for alert in _alert_list:
+        #make sure to only check alerts created (and by proxy, last checked) before the spot prices occur
+        while int((_spot_prices[ctr][TIME_STAMP]) > int(alert[LAST_CHECKED])):
+            #Check if this spot price is the highest price scanned so far
+            if int(_spot_prices[ctr][PRICE]) > highest_price:
+                highest_price = int(_spot_prices[ctr][PRICE])
+            #if a higher price has happened  after the alert, trigger it. Then go next alert
+            if highest_price > int(alert[PRICE]):
+                trigger_list.append(alert)
+                break
+            #if not, then continue checking spot prices before alerts creation(/last checked)
+            #prevent ctr from going out of range
+            elif ctr < (len(_spot_prices)-1):
                 ctr+=1
-            #else, try the next data point until data_point is older than current alert
+            #if for some reason, reached the end of spot prices with some alerts left. Just keep checking alerts
             else:
-                break   
-            
-            #else:
-            #    break #if price is not greater, try the next data_point
-            '''
-            #!!problem as this below doesnt update highest price variable
-            elif int (next(data_point))[TIME_STAMP] < int (_alert_list[ctr][LAST_CHECKED]):#Try the next datapoint
-            #how to ensure that we go next loop only if the data_point is older than alert??
-                ctr += 1
-                break #does this skip ahead on the next iteration? I think it does
-            '''
+                break
+                
+                
+
     #Must update alert table rows with new Last_Checked values. 
     #Also send all alerts that need to be triggered to SQS for processing.
     print(f"Highest price in data is :{highest_price}")              
