@@ -43,7 +43,6 @@ How:
 12)Any alert that was triggered needs to be deactivated by switching ACTIVE to 0
 13)Return the trigger list
 
-
 '''
 
 ##########
@@ -60,8 +59,6 @@ TIME_CREATED = 4
 #Historical_Data
 PRICE = 0
 TIME_STAMP = 1
-
-
 
 def lambda_handler(context, event):
     cursor = connection.cursor()
@@ -104,17 +101,14 @@ def lambda_handler(context, event):
     
     #make sure to update all last checked values for each alert  
     if (len(spot_prices)) is 0:
-        print("Empty datalist")
+        print("Empty spot_prices")
     elif (len(alert_list)) is 0:
         print("Empty alert_list")
     else:
         #First Time_Stamp. Will update all Last_Checked values using this
         first_time_stamp = spot_prices[0][TIME_STAMP]
         triggers = get_trigger_list(spot_prices, alert_list)   
-           
-        
-        
-        
+                 
         #check if the function returned any alerts to trigger
         if triggers is None:
             print("No alerts were triggered")
@@ -146,22 +140,16 @@ def lambda_handler(context, event):
         }
 #this function is for the high alerts
 def get_trigger_list(_spot_prices, _alert_list):
-    #get the most recent spot data_point from datalist
-    
-    #**************************************************
-    #****** test lists are greater than length 0 ******
-    #**************************************************
+    #get the most recent spot price from spot_prices
 
-
-    highest_price = -1 
+    highest_price = -1
+    highest_price_timestamp = 0
     #Return this list to handler
     trigger_list = []
     #internal list for updating tuples
-    update_alerts_list = []
     
     ctr = 0 #counter used to iterate through _alert_list
-    
-    
+        
     for alert in _alert_list:
         #keep track of the starting spot price being process
         
@@ -170,6 +158,7 @@ def get_trigger_list(_spot_prices, _alert_list):
             #Check if this spot price is the highest price scanned so far
             if int(_spot_prices[ctr][PRICE]) > highest_price:
                 highest_price = int(_spot_prices[ctr][PRICE])
+                highest_price_timestamp = int(_spot_prices[ctr][TIME_STAMP])
             #if a higher price has happened  after the alert, trigger it. Then go next alert
             if highest_price > int(alert[PRICE]):
                 trigger_list.append(alert)
@@ -182,12 +171,7 @@ def get_trigger_list(_spot_prices, _alert_list):
             else:
                 #update_alerts_list.append([(alert[PRICE_TARGET],alert[LAST_CHECKED]), alert[EMAIL], alert[ALERT_ACTIVE],])
                 break
-                
-                
-
-
-    
-    
+               
     #Also send all alerts that need to be triggered to SQS for processing.
     print(f"Highest price in data is :{highest_price}")              
     return trigger_list   

@@ -309,6 +309,27 @@ Resources:
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2    
+  
+  MailAlerts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Policies:
+        #- AmazonSESFullAccess
+        - Statement:
+          - Sid: LamdbaSESPolicy
+            Effect: Allow
+            Action: 
+              - ses:SendEmail
+              - ses:SendRawEmail
+              - ses:SendTemplatedEmail
+              - ssm:GetParameters
+              - ssm:GetParameter 
+            Resource: '*'
+      Handler: MailAlerts.lambda_handler
+      Runtime: python3.9
+      Architectures: 
+        - x86_64      
    
   TestAddDbData:
     Type: AWS::Serverless::Function
