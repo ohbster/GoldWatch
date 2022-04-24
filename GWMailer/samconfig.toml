@@ -1,0 +1,12 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "gw-mailer"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-yaz0v1licauq"
+s3_prefix = "gw-mailer"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "LambdaFunctionManagedPolicy=\"arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole\""
+image_repositories = []
