@@ -4,6 +4,7 @@
 from get_connection import *
 import logging
 import json
+import boto3
 from send_sqs import send_sqs
 
 connection = get_connection()
@@ -11,6 +12,9 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 '''
+CheckAlerts 
+by Obijah <ohbster@protonmail.com>
+
 Description: This function creates a list of all alerts that have been triggered and 
 sends them to SQS to be process (Email delivery, etc)
 
@@ -47,6 +51,40 @@ How:
 '''
 
 QUEUE_NAME = 'GoldWatchAlertTriggerQueue'
+
+# Create SQS client
+sqs = boto3.client('sqs')
+
+queue_url = sqs.get_queue_url(QueueName=QUEUE_NAME)['QueueUrl']
+
+# Send message to SQS queue
+response = sqs.send_message(
+    QueueUrl=queue_url,
+    DelaySeconds=10,
+    MessageAttributes={
+        'Title': {
+            'DataType': 'String',
+            'StringValue': 'The Whistler'
+        },
+        'Author': {
+            'DataType': 'String',
+            'StringValue': 'John Grisham'
+        },
+        'WeeksOn': {
+            'DataType': 'Number',
+            'StringValue': '6'
+        }
+    },
+    MessageBody=(
+        'Information about current NY Times fiction bestseller for '
+        'week of 12/11/2016.'
+    )
+)
+
+
+print(response['MessageId'])
+
+
 ##########
 #SCHEMA
 ##########
@@ -109,7 +147,8 @@ def lambda_handler(event, context):
     else:
         #First Time_Stamp. Will update all Last_Checked values using this
         first_time_stamp = spot_prices[0][TIME_STAMP]
-        triggers = get_trigger_list(spot_prices, alert_list)   
+        triggers = get_trigger_list(spot_prices, alert_list) 
+        print(f"Triggers dump--> {json.dumps(triggers)}")  
                  
         #check if the function returned any alerts to trigger
         if len(triggers) is 0:
@@ -122,7 +161,8 @@ def lambda_handler(event, context):
             SET Alert_Active = (CASE '''
             #this will create a case for every triggered alert to deactivate them
             for triggered in triggers:
-                sql +=f''' WHEN Email = '{triggered[EMAIL]}' AND Time_Created = {triggered[TIME_CREATED]} THEN 0'''                             
+                #sql +=f''' WHEN Email = '{triggered[EMAIL]}' AND Time_Created = {triggered[TIME_CREATED]} THEN 0'''                             
+                sql +=f''' WHEN Email = '{triggered['Email']}' AND Time_Created = {triggered['TimeCreated']} THEN 0'''
             sql +=(f''' ELSE Alert_Active
             END),
             Last_Checked = {first_time_stamp} 
@@ -135,18 +175,16 @@ def lambda_handler(event, context):
             
             #debugging
             for trigger in triggers:
-                print(f'Target reached: {trigger[PRICE_TARGET]}:{trigger[LAST_CHECKED]}')
-                
-    
-    
+                print(f'''Target reached: {trigger['PriceTarget']}:{trigger['LastChecked']}''')
+                 
     # Trying out messages 
-    testmsg = {"name":"test message",
-               "value": "0"}
+    #testmsg = {"name":"test message",
+    #          "value": "0"}
     
     #retmsg= send_sqs('GWTestQueue.fifo',testmsg) 
-    retmsg= send_sqs('TestQueue3',testmsg)
-    if retmsg is not None:
-        logging.info(f"Sent SQS messageID: {retmsg['MessageId']}") 
+    #retmsg= send_sqs('TestQueue3',testmsg)
+    #if retmsg is not None:
+    #    logging.info(f"Sent SQS messageID: {retmsg['MessageId']}") 
 
 
         
@@ -161,7 +199,7 @@ def get_trigger_list(_spot_prices, _alert_list):
     #get the most recent spot price from spot_prices
 
     highest_price = -1
-    highest_price_timestamp = 0
+    highest_price_timestamp = 0 #May use this later
     #Return this list to handler
     trigger_list = []
     #internal list for updating tuples
@@ -176,10 +214,16 @@ def get_trigger_list(_spot_prices, _alert_list):
             #Check if this spot price is the highest price scanned so far
             if int(_spot_prices[ctr][PRICE]) > highest_price:
                 highest_price = int(_spot_prices[ctr][PRICE])
-                highest_price_timestamp = int(_spot_prices[ctr][TIME_STAMP])
+                highest_price_timestamp = int(_spot_prices[ctr][TIME_STAMP]) 
             #if a higher price has happened  after the alert, trigger it. Then go next alert
-            if highest_price > int(alert[PRICE]):
-                trigger_list.append(alert)
+            if highest_price > int(alert[PRICE_TARGET]):
+                #append dictionaries to the list
+                #trigger_list.append(alert)
+                trigger_list.append({'Email':alert[EMAIL], 
+                                     'PriceTarget':alert[PRICE_TARGET],
+                                     'TimeCreated':alert[TIME_CREATED], 
+                                     'LastChecked':alert[LAST_CHECKED],
+                                     'AlertActive':alert[ALERT_ACTIVE]})
                 break
             #if not, then continue checking spot prices before alerts creation(/last checked)
             #prevent ctr from going out of range

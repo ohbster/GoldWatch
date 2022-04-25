@@ -24,7 +24,7 @@ def lambda_handler(event, context):
     #cursor.execute('''DROP TABLE IF EXISTS GoldPrice; ''')
     #cursor.execute('''DROP TABLE IF EXISTS Historical_Data; ''')
     #cursor.execute('''DROP TABLE IF EXISTS Alerts_Low;''')
-    cursor.execute('''DROP TABLE IF EXISTS Alerts_High;''')
+    #cursor.execute('''DROP TABLE IF EXISTS Alerts_High;''')
     #connection.commit()
     
     #Table for daily price info
@@ -46,21 +46,23 @@ def lambda_handler(event, context):
     #!!! Need to have a composite key with time_created and email
     
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_Low(
-    Email VARCHAR(320) PRIMARY KEY NOT NULL,
+    Email VARCHAR(320) NOT NULL,
     Price_Target REAL NOT NULL,
     Alert_Active BOOLEAN DEFAULT 1,
     Time_Created BIGINT UNSIGNED NOT NULL,
-    Last_Checked BIGINT UNSIGNED NOT NULL
+    Last_Checked BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (Email, Time_Created)
     );
     ''')
     
     #Alerts if price goes above a certain target
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alerts_High(
-    Email VARCHAR(320) PRIMARY KEY NOT NULL,
+    Email VARCHAR(320) NOT NULL,
     Price_Target REAL NOT NULL,
     Alert_Active BOOLEAN DEFAULT 1,
     Time_Created BIGINT UNSIGNED NOT NULL,
-    Last_Checked BIGINT UNSIGNED NOT NULL
+    Last_Checked BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (Email, Time_Created)
     );    
     ''')
     #cursor.execute('''INSERT INTO GoldPrice (Day, High, Low, Current)

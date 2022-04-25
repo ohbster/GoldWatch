@@ -12,21 +12,43 @@ def lambda_handler(event,context):
     
     QUEUE_NAME='GoldWatchAlertTriggerQueue'
     
-    #Alert Trigger queue
-    messages = receive_sqs(QUEUE_NAME)
-    logging.info(messages)
-    if messages is None or len(messages) is 0 :
-        print("No messages in queue")
-        
-    else:
-        for message in messages['Messages']:
-            body = message['Body']
-            receipt_handle = message['ReceiptHandle']
-            
-            print(f'Body = {body}')
-            print(f'Deleting message {receipt_handle} from queue')
-            delete_sqs(QUEUE_NAME, receipt_handle)
+    # Create SQS client
+    sqs = boto3.client('sqs')
     
+    #queue_url = sqs.get_queue_url(QueueName=QUEUE_NAME)['QueueUrl']
+    queue_url = 'https://sqs.us-east-1.amazonaws.com/378576100664/GoldWatchAlertTriggerQueue'
+    
+    print("Logging Event")
+    print(json.dumps(event))
+    logger.info(json.dumps(event))
+    '''    
+    # Receive message from SQS queue
+    response = sqs.receive_message(
+        QueueUrl=queue_url,
+        AttributeNames=[
+            #'SentTimestamp'
+            'All'
+        ],
+        MaxNumberOfMessages=1,
+        MessageAttributeNames=[
+            'All'
+        ],
+        VisibilityTimeout=0,
+        WaitTimeSeconds=0
+    )
+    
+    logger.info(json.dumps(response))
+
+    message = response['Messages'][0]
+    receipt_handle = message['ReceiptHandle']
+    
+    # Delete received message from queue
+    sqs.delete_message(
+        QueueUrl=queue_url,
+        ReceiptHandle=receipt_handle
+    )
+    print('Received and deleted message: %s' % message)
+    '''  
     SENDER = "noreply@goldwatch.link"
     RECIPIENT = "goldwatchtest1@mailinator.com"
     AWS_REGION = "us-east-1"
@@ -36,8 +58,10 @@ def lambda_handler(event,context):
     client = boto3.client('ses',region_name=AWS_REGION)
     
     td = {
-                "name":"ohbster", 
-                "pricetarget":"2001"
+                #"name":"ohbster",
+                "name":f"{event}", 
+                "pricetarget":"2001",
+                #"Message ID":f"{event["
             }
     
     try:
@@ -51,6 +75,7 @@ def lambda_handler(event,context):
             Template ='AlertTemplate',
             #TemplateData = json.dumps(td),
             TemplateData = '{ \"name\":\"ohbster\",\"pricetarget\":\"2001\" }',
+            #TemplateData = td,
             ConfigurationSetName = 'FailureToSend'
         )
         

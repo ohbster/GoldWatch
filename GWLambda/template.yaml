@@ -16,6 +16,16 @@ Parameters:
     Description: Role needed for lambda to access SQS Queues
     Default: arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
     
+  LambdaVPCAccessRole:
+    Type: String
+    Description: Policy to allow lambda functions to communicate to resources in vpc
+    Default: arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+    
+  LambdaBasicExecutionRole:
+    Type: String
+    Description: Arn for LambdaBasicExecutionRole needed for logging
+    Default: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    
   MailAlertsRoleName:
     Type: String
     Description: Name string for MailAlertsRole
@@ -246,7 +256,8 @@ Resources:
             
       Path: /
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole ############IF cant connect to DB check this out
+        - !Ref LambdaVPCAccessRole ############IF cant connect to DB check this out
+        - !Ref LambdaBasicExecutionRole
         #- !Ref LambdaSsmManagedPolicy
         - !Ref LambdaSQSManagedPolicy
       RoleName: !Ref CheckAlertsRoleName     
@@ -264,9 +275,10 @@ Resources:
           Action: 
             - 'sts:AssumeRole'
       Path: /
-      #ManagedPolicyArns:
-      #  - !Ref LambdaSESManagedPolicy
+      ManagedPolicyArns:
+        - !Ref LambdaBasicExecutionRole
       RoleName: !Ref MailAlertsRoleName
+      
       
 ##########
 #Policies
