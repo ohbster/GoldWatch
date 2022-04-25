@@ -169,197 +169,7 @@ Parameters:
     Type: String
 
 Resources:
-         
-##########
-#Functions
-##########          
-#in case you need to deal with cors, etc. use link below for example
-#https://github.com/aws/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-
-  GoldWatchInitFunction:
-    Type: AWS::Serverless::Function 
-    Properties:
-      CodeUri: gold_watch/
-      Handler: gwinit.lambda_handler
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - Statement:
-          - Sid: SSMGetParameterPolicy
-            Effect: Allow
-            Action:
-              - ssm:GetParameters
-              - ssm:GetParameter
-            Resource: '*'         
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-      Events: #this ara may need to be clipped. Not needed and should not be executed more than once.
-        Init:
-          Type: Api 
-          Properties:
-            Path: /init
-            Method: get
-      #Allow the lambda function to communicate with the rds and web server instance      
-      VpcConfig:
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2
-            
-# GetDateFunction:
-#  Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: gold_watch/
-#      Handler: date.lambda_handler
-#      Runtime: python3.9
-#      Architectures:
-#       - x86_64
-#      Events:
-#        GetDate:
-#          Type: Api
-#          Properties:
-#            Path: /date
-#            Method: get
-            
-  UpdateGoldPrice:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: gold_watch/
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - Statement:
-          - Sid: SSMGetParameterPolicy
-            Effect: Allow
-            Action:
-              - ssm:GetParameters
-              - ssm:GetParameter
-              
-            Resource: '*'  
-            
-#        - Statement:
-#          - Sid: InvokeLambdaFunction
-#            Effect: Allow
-#            Action: lambda:InvokeFunction
-#            Resource: '*'                        
-#            Principal:
-#              - Service: events.amazonaws.com
-#            Condition:
-#              ArnLike:
-#                AWS:SourceArn: !GetAtt UpdateGoldPriceRule.Arn   
-            
-        
-        
-                  
-      #Environment:
-        #Variables:
-          #ENV: 'dev'
-          #DBUSER: "{{resolve:ssm:gw-dbuser:1}}"
-      Handler: UpdateGoldPrice.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64     
-      Events:
-        RateEvent:
-          Type: Schedule
-          Properties:
-            Schedule: 'rate(5 minutes)'
-            Name: RateSchedule
-            Description: Trigger UpdateGoldPrice lambda function every 5 mins
-      VpcConfig:
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
-          
-  CheckAlerts:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: gold_watch/
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - Statement:
-          - Sid: SSMGetParameterPolicy
-            Effect: Allow
-            Action:
-              - ssm:GetParameters
-              - ssm:GetParameter            
-            Resource: '*'  
-      Handler: CheckAlerts.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64     
-      #Events:
-      #  RateEvent:
-      #    Type: Schedule
-      #    Properties:
-      #      Schedule: 'rate(5 minutes)'
-      #      Name: RateSchedule
-      #      Description: Trigger CheckAlerts lambda function every 5 mins
-      VpcConfig:
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2       
-   
-  TestAddDbData:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: gold_watch/
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - Statement:
-          - Sid: SSMGetParameterPolicy
-            Effect: Allow
-            Action:
-              - ssm:GetParameters
-              - ssm:GetParameter            
-            Resource: '*'  
-      Handler: TestAddDbData.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64     
-      #Events:
-      #  RateEvent:
-      #    Type: Schedule
-      #    Properties:
-      #      Schedule: 'rate(5 minutes)'
-      #      Name: RateSchedule
-      #      Description: Trigger CheckAlerts lambda function every 5 mins
-      VpcConfig:
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
-           
-#  LambdaEventBridgePolicy:    
-#    Type: AWS::IAM::Policy
-#   Properties: 
-#      PolicyDocument:
-#        Version: "2012-10-17"
-#        Principal: events.amazonaws.com
-#        Statement:
- #         - Effect: Allow
- #           Action:
- #             - 'lambda:InvokeFunction'
- #           Resource: '*'
- #     PolicyName: LambdaAllowUpdatePriceRule
- #     Roles: 
- #       - !Ref LambdaRoleForEventBridge
-#        Users: 
-#          - String
-        
+                
            
 ##########
 #Db    
@@ -418,25 +228,7 @@ Resources:
           - "GoldWatchDB"
           - "Endpoint.Port"          
                   
-##########
-#EventBridge 
-##########    
-  #This section creates an EventsBridge Rule that triggers lambda functions 
-  #to update the gold price at 5 min intervals.     
-  UpdateGoldPriceRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: EventBridge rule to run the UpdateGoldPrice lambda function
-      Name: UpdateGoldPriceRule
-      ScheduleExpression: rate(5 minutes)
-      State: ENABLED
-      Targets:
-        - 
-          Arn:
-            Fn::GetAtt:
-              - "UpdateGoldPrice"
-              - "Arn"
-          Id: "UpdateGoldPriceTarget1"
+
 
 ##########
 #EC2 Instance used for web and mail server
@@ -558,15 +350,15 @@ Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  GoldWatchInitApi:
-    Description: "API Gateway endpoint URL for Prod stage for Gold Watch Init"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/init/"
-  GetDateApi:
-    Description: "Api Gateway endpoint URL for Prod stage for GetDate function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/date/" 
-  UpdateGoldPriceApi:
-    Description: "Api Gateway endpoint URL for Prod stage for GetCurGoldPrice function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/UpdateGoldPrice/"
+#  GoldWatchInitApi:
+#    Description: "API Gateway endpoint URL for Prod stage for Gold Watch Init"
+#    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/init/"
+#  GetDateApi:
+#    Description: "Api Gateway endpoint URL for Prod stage for GetDate function"
+#    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/date/" 
+# UpdateGoldPriceApi:
+#    Description: "Api Gateway endpoint URL for Prod stage for GetCurGoldPrice function"
+#    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/UpdateGoldPrice/"
 #  GetDateFunction:
 #    Description: "Get date lambda function ARN"
 #    Value: !GetAtt GetDateFunction.Arn

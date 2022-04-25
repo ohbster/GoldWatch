@@ -1,0 +1,331 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GWMailer
+
+  Sample SAM Template for GWMailer
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+
+Parameters:
+  LambdaSQSManagedPolicy:
+    Type: String
+    Description: Role needed for lambda to access SQS Queues
+    Default: arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+    
+  MailAlertsRoleName:
+    Type: String
+    Description: Name string for MailAlertsRole
+    Default: gw-mail-alerts-role
+    
+  CheckAlertsRoleName:
+    Type: String
+    Default: gw-check-alerts-role
+    
+  ExportVpcStackName:
+    Description: The name of the vpc stack that exports values
+    Type: String
+    Default: gw-network 
+
+Resources:
+##########
+#Functions
+##########  
+
+  GoldWatchInitFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: gold_watch/
+      Handler: gwinit.lambda_handler
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter
+            Resource: '*'         
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events: #this ara may need to be clipped. Not needed and should not be executed more than once.
+        Init:
+          Type: Api 
+          Properties:
+            Path: /init
+            Method: get
+      #Allow the lambda function to communicate with the rds and web server instance      
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2
+                        
+  UpdateGoldPrice:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter              
+            Resource: '*'  
+
+      Handler: UpdateGoldPrice.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64     
+      Events:
+        RateEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(5 minutes)'
+            Name: RateSchedule
+            Description: Trigger UpdateGoldPrice lambda function every 5 mins
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
+          
+  CheckAlerts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Role: !GetAtt CheckAlertsRole.Arn
+      #Policies:
+      #  - AWSLambdaVPCAccessExecutionRole
+      #  - Statement:
+      #    - Sid: SSMGetParameterPolicy
+      #      Effect: Allow
+      #      Action:
+      #        - ssm:GetParameters
+      #        - ssm:GetParameter            
+      #      Resource: '*'  
+      Handler: CheckAlerts.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64     
+      #Events:
+      #  RateEvent:
+      #    Type: Schedule
+      #    Properties:
+      #      Schedule: 'rate(5 minutes)'
+      #      Name: RateSchedule
+      #      Description: Trigger CheckAlerts lambda function every 5 mins
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2       
+    DependsOn: CheckAlertsRole
+   
+  TestAddDbData:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter            
+            Resource: '*'  
+      Handler: TestAddDbData.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64     
+      #Events:
+      #  RateEvent:
+      #    Type: Schedule
+      #    Properties:
+      #      Schedule: 'rate(5 minutes)'
+      #      Name: RateSchedule
+      #      Description: Trigger CheckAlerts lambda function every 5 mins
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
+
+  MailAlerts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Role: !GetAtt MailAlertsRole.Arn
+      #Policies:
+      #  - Statement:
+      #    - Sid: LamdbaSESPolicy
+      #      Effect: Allow
+      #      Action: 
+      #        - ses:SendEmail
+      #        - ses:SendRawEmail
+      #        - ses:SendTemplatedEmail
+      #      Resource: '*'
+      Handler: MailAlerts.lambda_handler
+      Runtime: python3.9
+      Architectures: 
+        - x86_64  
+    DependsOn: MailAlertsRole    
+    
+    
+##########
+#Queue 
+##########    
+#  GWTestQueue:
+#    Type: AWS::SQS::Queue
+#    Properties:
+#      QueueName: GWTestQueue
+  
+  #Queue Policy
+#  GWTestQueuePolicy:
+#    Type: AWS::SQS::QueuePolicy
+#    Properties:
+#      PolicyDocument:      
+#        Version: 2008-10-17
+#        Statement:
+#          - Sid: '__owner_statement'
+#            Effect: Allow
+#            Principal:
+#              AWS: 
+#                - arn:aws:iam::378576100664:root
+#            Action: 'SQS:*'
+#            Resource: !Ref GWTestQueue
+#          - Sid: '__sender_statement'
+#            Effect: Allow
+#            Principal:
+#              AWS: 
+#               -!Ref CheckAlertsRole
+#     Queues:
+#       - !Ref GWTestQueue        
+          
+        
+      
+    
+##########
+#Roles 
+##########  
+             
+  #LambdaSQSRole:
+  CheckAlertsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal: 
+            Service: 
+              - lambda.amazonaws.com
+          Action: 
+            - 'sts:AssumeRole'      
+         ################################################
+         #continue here
+            
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole ############IF cant connect to DB check this out
+        #- !Ref LambdaSsmManagedPolicy
+        - !Ref LambdaSQSManagedPolicy
+      RoleName: !Ref CheckAlertsRoleName     
+      
+  MailAlertsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal: 
+            Service: 
+              - lambda.amazonaws.com
+          Action: 
+            - 'sts:AssumeRole'
+      Path: /
+      #ManagedPolicyArns:
+      #  - !Ref LambdaSESManagedPolicy
+      RoleName: !Ref MailAlertsRoleName
+      
+##########
+#Policies
+########## 
+  LambdaSsmManagedPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"   
+        Statement:
+          Sid: SSMGetParameterPolicy
+          Effect: Allow
+          Action:
+            - ssm:GetParameters
+            - ssm:GetParameter            
+          Resource: '*' 
+      PolicyName: 'lambda-ssm-policy'
+      Roles:
+        - !Ref CheckAlertsRole
+
+  LambdaSESManagedPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+              - ses:SendTemplatedEmail
+            Resource: '*'
+      PolicyName: 'gw-mail-alerts-policy'
+      Roles: 
+        - !Ref MailAlertsRoleName
+    DependsOn: MailAlertsRole    
+
+##########
+#EventBridge 
+##########    
+  #This section creates an EventsBridge Rule that triggers lambda functions 
+  #to update the gold price at 5 min intervals.     
+  UpdateGoldPriceRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: EventBridge rule to run the UpdateGoldPrice lambda function
+      Name: UpdateGoldPriceRule
+      ScheduleExpression: rate(5 minutes)
+      State: ENABLED
+      Targets:
+        - 
+          Arn:
+            Fn::GetAtt:
+              - "UpdateGoldPrice"
+              - "Arn"
+          Id: "UpdateGoldPriceTarget1"
+                
+             
+#Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api

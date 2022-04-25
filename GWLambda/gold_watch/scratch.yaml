@@ -1,0 +1,42 @@
+#This section creates role and System Manager resources to run commands to
+  #ec2 instance for mailing alerts
+  EC2RoleForSSM:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Actions:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeAssociation
+                  - ssm:GetDeployablePatchSnapshotForInstance
+                  - ssm:GetDocument
+                  - ssm:DescribeDocument
+                  - ssm:GetManifest
+                  - ssm:GetParameters
+                  - ssm:ListAssociations
+                  - ssm:ListInstanceAssociations
+                  - ssm:PutInventory
+                  - ssm:PutComplianceItems
+                  - ssm:PutConfigurePackageResult
+                  - ssm:UpdateAssociationStatus
+                  - ssm:UpdateInstanceAssociationStatus
+                  - ssm:UpdateInstanceInformation
+                Resource: '*'
+                  
+              
+              
+      RoleName: AllowsEC2ToAccessSystemManagerRole
+      Description: Allows EC2 Instance to access Systems Manger
