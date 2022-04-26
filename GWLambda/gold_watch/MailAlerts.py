@@ -3,89 +3,68 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 from receive_sqs import *
+from datetime import datetime
 
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event,context):
-    
-    QUEUE_NAME='GoldWatchAlertTriggerQueue'
-    
-    # Create SQS client
-    sqs = boto3.client('sqs')
-    
-    #queue_url = sqs.get_queue_url(QueueName=QUEUE_NAME)['QueueUrl']
-    queue_url = 'https://sqs.us-east-1.amazonaws.com/378576100664/GoldWatchAlertTriggerQueue'
-    
+       
     print("Logging Event")
     print(json.dumps(event))
     logger.info(json.dumps(event))
-    '''    
-    # Receive message from SQS queue
-    response = sqs.receive_message(
-        QueueUrl=queue_url,
-        AttributeNames=[
-            #'SentTimestamp'
-            'All'
-        ],
-        MaxNumberOfMessages=1,
-        MessageAttributeNames=[
-            'All'
-        ],
-        VisibilityTimeout=0,
-        WaitTimeSeconds=0
-    )
     
-    logger.info(json.dumps(response))
+    #testDict = json.dump(event['Records'][0]['body'])
 
-    message = response['Messages'][0]
-    receipt_handle = message['ReceiptHandle']
+    alerts = event['Records'][0]['body']
+    #print(f"Alerts is of type {type(alerts)}")
     
-    # Delete received message from queue
-    sqs.delete_message(
-        QueueUrl=queue_url,
-        ReceiptHandle=receipt_handle
-    )
-    print('Received and deleted message: %s' % message)
-    '''  
+    alerts = json.loads(alerts)
+    #print(f"alerts = {alerts}")
+   
     SENDER = "noreply@goldwatch.link"
-    RECIPIENT = "goldwatchtest1@mailinator.com"
+    #RECIPIENT = "goldwatchtest1@mailinator.com"
     AWS_REGION = "us-east-1"
-    SUBJECT = "SES Test"
-    CHARSET = "UTF-8"
-    
+    #SUBJECT = "SES Test"
+    #CHARSET = "UTF-8"
+       
     client = boto3.client('ses',region_name=AWS_REGION)
     
-    td = {
-                #"name":"ohbster",
-                "name":f"{event}", 
-                "pricetarget":"2001",
-                #"Message ID":f"{event["
-            }
     
-    try:
-        response = client.send_templated_email(
-            Source=SENDER,
-            Destination={
-                'ToAddresses':[
-                    RECIPIENT,
-                ],
-            },
-            Template ='AlertTemplate',
-            #TemplateData = json.dumps(td),
-            TemplateData = '{ \"name\":\"ohbster\",\"pricetarget\":\"2001\" }',
-            #TemplateData = td,
-            ConfigurationSetName = 'FailureToSend'
-        )
-        
-    except ClientError as e:
-        print(e.response['Error']['Message'])
-    else:
-        print("Email sent! Message ID:"),
-        print(response)
+    for alert in alerts:
         
         
+    
+        dt = datetime.fromtimestamp(alert['TimeCreated'])
+        ################################
+        #Debuugging delete me
+        ################################
+        print(f"TimeCreated = {alert['TimeCreated']}")
+        print(f"dt = {dt.strftime('%x %X')}")
+    
+     
+        try:
+            response = client.send_templated_email(
+                Source=SENDER,
+                Destination={
+                    'ToAddresses':[
+                        alert['Email']
+                    ],
+                },
+                Template ='AlertTemplate',
+                TemplateData = '{ \"time_created\":' + 
+                f"\"{dt.strftime('%x %X')}\"" + 
+                ',\"price_target\":' + f"{alert['PriceTarget']}" + '}',
+               
+                ConfigurationSetName = 'FailureToSend'
+            )
+            
+        except ClientError as e:
+            print(e.response['Error']['Message'])
+        else:
+            print("Email sent! Message ID:"),
+            print(response)
     
     return { "statusCode":"200",
             "body":json.dumps({

@@ -36,18 +36,20 @@ def lambda_handler(context, event):
     
         
     cursor.execute('TRUNCATE TABLE Alerts_High;')
+    connection.commit()
     sql = '''INSERT INTO Alerts_High 
     (Email, Price_Target, Time_Created, Last_Checked)
     VALUES 
-    ('goldwatchtest001@mailinator.com', 1930.00, 0, 1650401244631), 
-    ('goldwatchtest002@mailinator.com', 2020.00, 0, 1650401934910),
-    ('goldwatchtest003@mailinator.com', 1980.00, 0, 1650405775114),
-    ('goldwatchtest004@mailinator.com', 2010.00, 0, 1650406074791)
+    ('goldwatchtest001@mailinator.com', 1930.00, 1650000000, 1650401244631), 
+    ('goldwatchtest002@mailinator.com', 2020.00, 1650000000, 1650401934910),
+    ('goldwatchtest003@mailinator.com', 1980.00, 1650000000, 1650405775114),
+    ('goldwatchtest004@mailinator.com', 2010.00, 1650000000, 1650406074791)
   
     ; '''
     cursor.execute(sql)
     connection.commit()
     
+    """
     sql = '''UPDATE Alerts_High
     SET Price_Target = (CASE WHEN Email = 'goldwatchtest002@mailinator.com' AND TIME_CREATED = 0 THEN 1999.00
                         WHEN Email = 'goldwatchtest004@mailinator.com' THEN 2000.00
@@ -65,7 +67,7 @@ def lambda_handler(context, event):
     results = cursor.fetchall()
     for result in results:
         print(f"Email:{result[0]} | Price_Target:{result[1]} | Alert_Active:{result[2]} | Time_Created:{result[3]} | Last_checked:{result[4]}")
-    
+    """
     
     return{ "statusCode": 200,
            "body": json.dumps({

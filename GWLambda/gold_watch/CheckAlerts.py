@@ -2,6 +2,7 @@
 #https://github.com/ohbster/GoldWatch/
 
 from get_connection import *
+import time
 import logging
 import json
 import boto3
@@ -52,39 +53,6 @@ How:
 
 QUEUE_NAME = 'GoldWatchAlertTriggerQueue'
 
-# Create SQS client
-sqs = boto3.client('sqs')
-
-queue_url = sqs.get_queue_url(QueueName=QUEUE_NAME)['QueueUrl']
-
-# Send message to SQS queue
-response = sqs.send_message(
-    QueueUrl=queue_url,
-    DelaySeconds=10,
-    MessageAttributes={
-        'Title': {
-            'DataType': 'String',
-            'StringValue': 'The Whistler'
-        },
-        'Author': {
-            'DataType': 'String',
-            'StringValue': 'John Grisham'
-        },
-        'WeeksOn': {
-            'DataType': 'Number',
-            'StringValue': '6'
-        }
-    },
-    MessageBody=(
-        'Information about current NY Times fiction bestseller for '
-        'week of 12/11/2016.'
-    )
-)
-
-
-print(response['MessageId'])
-
-
 ##########
 #SCHEMA
 ##########
@@ -102,7 +70,6 @@ TIME_STAMP = 1
 
 def lambda_handler(event, context):
     cursor = connection.cursor()
-    count = 0
             
     #get all alerts ordered by descending last_checked
     cursor.execute('''SELECT Price_Target, Last_Checked, Email, Alert_Active, Time_Created
@@ -123,6 +90,7 @@ def lambda_handler(event, context):
     
     #get the oldest last_checked timestamp
     #this returns the last_checked timestamp of last alert in list (ordered from new to old)
+    #check if alert list has alerts first.
     oldest_alert = alert_list[len(alert_list)-1][LAST_CHECKED] 
 
     #get all price data after start_point (starting from where last check ended)
@@ -176,22 +144,14 @@ def lambda_handler(event, context):
             #debugging
             for trigger in triggers:
                 print(f'''Target reached: {trigger['PriceTarget']}:{trigger['LastChecked']}''')
-                 
-    # Trying out messages 
-    #testmsg = {"name":"test message",
-    #          "value": "0"}
-    
-    #retmsg= send_sqs('GWTestQueue.fifo',testmsg) 
-    #retmsg= send_sqs('TestQueue3',testmsg)
-    #if retmsg is not None:
-    #    logging.info(f"Sent SQS messageID: {retmsg['MessageId']}") 
-
-
+            
+            response = send_sqs(QUEUE_NAME, triggers)
+            logger.info(response)
         
     return{ "statusCode": 200,
            "body": json.dumps({
                'body' : json.dumps(event),
-               "message" : f"{count} Alerts triggered", #Can trash this      
+                    
                })
         }
 #this function is for the high alerts
