@@ -50,7 +50,7 @@ How:
 13)Return the trigger list
 
 '''
-
+             
 QUEUE_NAME = 'GoldWatchAlertTriggerQueue'
 
 ##########

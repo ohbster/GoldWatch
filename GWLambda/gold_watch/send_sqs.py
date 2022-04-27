@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 
 def send_sqs(queue_name,message):
     # Create SQS client
-    sqs = boto3.client('sqs')
+    sqs = boto3.client('sqs', region_name='us-east-1')
     
     queue_url = sqs.get_queue_url(QueueName=queue_name)['QueueUrl']
     

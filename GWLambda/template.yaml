@@ -41,6 +41,21 @@ Parameters:
     Default: gw-network 
 
 Resources:
+
+##########
+#API
+##########
+#  ApiGatewayApi:
+#    Type: AWS::Serverless::Api
+#    Properties:
+#      StageName: prod 
+      #Auth:
+      #  DefaultAuthorizer: GWLambdaTokenAuthorizer
+      #  Authorizers:
+      #    GWLambdaTokenAuthorizer:
+      #      FunctionArn: !GetAtt GWAuthFunction.Arn
+          
+
 ##########
 #Functions
 ##########  
@@ -62,12 +77,12 @@ Resources:
       Runtime: python3.9
       Architectures:
         - x86_64
-      Events: #this ara may need to be clipped. Not needed and should not be executed more than once.
-        Init:
-          Type: Api 
-          Properties:
-            Path: /init
-            Method: get
+      #Events: #this ara may need to be clipped. Not needed and should not be executed more than once.
+      #  Init:
+      #    Type: Api 
+      #    Properties:
+      #      Path: /init
+      #      Method: get
       #Allow the lambda function to communicate with the rds and web server instance      
       VpcConfig:
         SecurityGroupIds:
@@ -111,6 +126,41 @@ Resources:
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
+  
+  CreateAlert:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Handler: CreateAlert.lambda_handler
+      Events:
+        CreateAlert:
+          Type: Api
+          Properties:
+            Path: /CreateAlert
+            Method: get
+            #RestApiId:
+            #  Ref: ApiGatewayApi
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+          - Sid: SSmGetParameterPolicy
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:GetParameter
+            Resource: '*'
+      
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-DatabaseSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-WebServerSecurityGroup
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2  
           
   CheckAlerts:
     Type: AWS::Serverless::Function
@@ -129,7 +179,14 @@ Resources:
       Handler: CheckAlerts.lambda_handler
       Runtime: python3.9
       Architectures:
-        - x86_64     
+        - x86_64 
+      Events:
+        RateEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(5 minutes)'
+            Name: CheckAlertsRateSchedule
+            Description: Trigger CheckAlerts lambda function every 5 mins    
       #Events:
       #  RateEvent:
       #    Type: Schedule
@@ -147,6 +204,26 @@ Resources:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2       
     DependsOn: CheckAlertsRole
    
+  MailAlerts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: gold_watch/
+      Role: !GetAtt MailAlertsRole.Arn
+      #Policies:
+      #  - Statement:
+      #    - Sid: LamdbaSESPolicy
+      #      Effect: Allow
+      #      Action: 
+      #        - ses:SendEmail
+      #        - ses:SendRawEmail
+      #        - ses:SendTemplatedEmail
+      #      Resource: '*'
+      Handler: MailAlerts.lambda_handler
+      Runtime: python3.9
+      Architectures: 
+        - x86_64  
+    DependsOn: MailAlertsRole    
+    
   TestAddDbData:
     Type: AWS::Serverless::Function
     Properties:
@@ -178,29 +255,7 @@ Resources:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-ALBSecurityGroup
         SubnetIds:
           - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet1
-          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2 
-
-  MailAlerts:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: gold_watch/
-      Role: !GetAtt MailAlertsRole.Arn
-      #Policies:
-      #  - Statement:
-      #    - Sid: LamdbaSESPolicy
-      #      Effect: Allow
-      #      Action: 
-      #        - ses:SendEmail
-      #        - ses:SendRawEmail
-      #        - ses:SendTemplatedEmail
-      #      Resource: '*'
-      Handler: MailAlerts.lambda_handler
-      Runtime: python3.9
-      Architectures: 
-        - x86_64  
-    DependsOn: MailAlertsRole    
-    
-    
+          - Fn::ImportValue: !Sub ${ExportVpcStackName}-PrivateSubnet2     
 ##########
 #Queue 
 ##########    
@@ -277,6 +332,7 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - !Ref LambdaBasicExecutionRole
+        - !Ref LambdaSQSManagedPolicy
       RoleName: !Ref MailAlertsRoleName
       
       
@@ -337,7 +393,13 @@ Resources:
           Id: "UpdateGoldPriceTarget1"
                 
              
-#Outputs:
+Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  CreateAlertApi:
+    Description: "API Gateway endpoint URL for Prod stage for CreateAlert"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/CreateAlert/"
+  
+  
+  
