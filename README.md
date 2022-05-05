@@ -23,8 +23,8 @@ sam depoy --guided
 
 *Purpose*
 This is my first project using AWS. On the surface, it displays daily spot prices for an ounce of Gold in USD. Underneath, it was meant to develop my understanding of many services including:
+![diagram here](/GoldWatch%20VPC.jpg "VPN Diagram")
 - Creating CloudFormation /SAM stacks (created in yaml and deployed from AWS CLI using simple bash scripts)
-- ![diagram here](/GoldWatch%20VPC.jpg "VPN Diagram")
 - VPC  
 - EC2 instances in multiple availability zones behind an application load balancer
 - Apache webserver's with PHP running on Amazon Linux
