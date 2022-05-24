@@ -1,7 +1,7 @@
 #This function retrieves price and timestamp data from api.metals.live.
 #Returns the current daily_low, daily_high, and current price.
 
-#optionally, draw a graph (Line or candlestick) with all the data returned 
+#optionally, draw a graph (Line or candlestick) with all the data returned
 
 
 #this function should run every 5 mins, or 12 times every hour
@@ -34,33 +34,33 @@ def lambda_handler(event, context):
         return {"statusCode": 200,
                 "body": json.dumps({
                     "message": "Price data is currently unavailable",
-                    
+
                     }
                     ),
-            
+
         }
-    
-    #initialize variables (to set the low's and highs)    
+
+    #initialize variables (to set the low's and highs)
     daily_low = float(price_data[0]["price"])
-    daily_high = float(price_data[0]["price"]) 
+    daily_high = float(price_data[0]["price"])
     cur_price = float(price_data[0]["price"])
     day = datetime.datetime.now().strftime('%Y-%m-%d')
-    
+
     #get the most recent time_stamp in Historical_Data and use as point
-    #to continue adding data.  
+    #to continue adding data.
     cursor.execute('''SELECT MAX(Time_Stamp) FROM Historical_Data;''')
     connection.commit()
     row = cursor.fetchone() #should only be one row from using MAX
     if row[0] is None:
-        last_time_stamp = 0 
+        last_time_stamp = 0
     else:
         last_time_stamp = int(row[0])
-    
-    #Statement to insert historical data into table  
+
+    #Statement to insert historical data into table
     insert_statement = "INSERT INTO Historical_Data (Price, Time_Stamp) VALUES "
     values = ""
-         
-    
+
+
     #find the 24hour low, high, and current price
     for entry in price_data:
         cur_price = float(entry["price"])
@@ -69,8 +69,8 @@ def lambda_handler(event, context):
         elif cur_price < daily_low:
             daily_low = cur_price
         #test if entry timestamp is greatter than time_stamp
-        #if so add to insert statement 
-        
+        #if so add to insert statement
+
         if (int(entry["timestamp"]) > last_time_stamp) :
             values += f'''({entry["price"]},{entry["timestamp"]})'''
             #If the current entry is not the last, insert a comma between values
@@ -82,35 +82,35 @@ def lambda_handler(event, context):
         print("No new data to insert to Historic table")
     else:
         values += ';'
-        hd_sql  = insert_statement + values  
+        hd_sql  = insert_statement + values
         print (hd_sql)
         cursor.execute(hd_sql)
-        connection.commit()             
-            
-    #update the daily row 
+        connection.commit()
+
+    #update the daily row
     sql = f'''INSERT INTO GoldPrice(Daystamp, High, Low, Current)
     VALUES ('{day}', {daily_high}, {daily_low}, {cur_price})
     ON DUPLICATE KEY UPDATE
     High = {daily_high}, Low = {daily_low}, Current = {cur_price};
-    
+
     '''
     cursor.execute(sql)
     connection.commit()
-    
+
     for row in cursor:
         print(row)
         logger.info(row)
-    
-    
+
+
     return{ "statusCode": 200,
            "body": json.dumps({
                "sql" : f"sql = {sql}",
                "day" : f"day = {day}"
                })
-        
-      
+
+
         }
-    
+
 
 
 #assert that price is not None
@@ -121,5 +121,5 @@ def lambda_handler(event, context):
 #print(f'price_data[1] is of type {type(price_data[1])}')
 
 #for price in price_data:
-    
+
 #print(price_data)
