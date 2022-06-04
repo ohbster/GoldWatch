@@ -6,7 +6,7 @@ This is my first SAM / CloudFormation application. Its primary purpose is a lear
 *Update this readme to include list of files and there purpose*
 
 *Notes*
-- The purprose of this app is primarily a learning exercise. I should be pretty useful during in the meantime with current market volitilty
+- The purpose of this app is primarily a learning exercise. I should be pretty useful during in the meantime with current market volatility
 
 - The RDS DBInstance will default to whatever the vpc is the default on the aws account. This is only done
 to avoid incurring charges by using a subnetgroup and multi-az instances running as free tier only allow a single-az instance and I am unaware of any way to deploy the instance to another VPC without subnetgroup. If you know of one, do email me as I am still learning AWS deployment. ohbster@protonmail.com

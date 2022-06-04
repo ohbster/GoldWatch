@@ -9,43 +9,43 @@ Parameters:
     Default: gw-network
     
 Resources:
-  NatGateway1Eip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: EIP1
+#  NatGateway1Eip:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      Domain: vpc
+#      Tags:
+##        - Key: Name
+#          Value: EIP1
           
-  NatGateway2Eip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: EIP2
+#  NatGateway2Eip:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      Domain: vpc
+#      Tags:
+#        - Key: Name
+#          Value: EIP2
           
-  NatGateway1:
-    Type: AWS::EC2::NatGateway
-    Properties: 
-      AllocationId: !GetAtt NatGateway1Eip.AllocationId
-      #ConnectivityType: 
-      SubnetId: 
-        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1
-      Tags: 
-        - Key: Name
-          Value: Nat Gateway Public Subnet 1 
+#  NatGateway1:
+#    Type: AWS::EC2::NatGateway
+#    Properties: 
+#      AllocationId: !GetAtt NatGateway1Eip.AllocationId
+#      #ConnectivityType: 
+#      SubnetId: 
+#        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet1
+#      Tags: 
+#        - Key: Name
+#          Value: Nat Gateway Public Subnet 1 
           
-  NatGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:       
-      AllocationId: !GetAtt NatGateway2Eip.AllocationId
-      #ConnectivityType: 
-      SubnetId: 
-        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet2
-      Tags: 
-        - Key: Name
-          Value: Nat Gateway Public Subnet 2     
+#  NatGateway2:
+#    Type: AWS::EC2::NatGateway
+#    Properties:       
+#      AllocationId: !GetAtt NatGateway2Eip.AllocationId
+#      #ConnectivityType: 
+#      SubnetId: 
+#        Fn::ImportValue: !Sub ${ExportVpcStackName}-PublicSubnet2
+#      Tags: 
+#        - Key: Name
+#          Value: Nat Gateway Public Subnet 2     
           
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
